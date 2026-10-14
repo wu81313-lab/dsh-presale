@@ -1,0 +1,31 @@
+# dsh-presale：本包作为 DSH profile bundle，向组合树插入一行宿主插件。
+#
+# 装载方式（与 dsh-local-kb 相同）：
+#   1. 本包放在 ~/.dsh/plugins/dsh-presale
+#   2. profile 的 package.json 里 "dsh-presale": "link:..."
+#   3. profile 的 dsh.profile.bundles 数组里追加 "dsh-presale"
+# 这样无需改动用户的 cordis.patch.yml —— 那个文件被 dshmarket 逐行扫描，
+# 多写一个键会破坏它的停用状态记录。
+#
+# 改配置有两种方式：
+#   1) 直接改这里的 config（重启 DSH 后生效）
+#   2) 运行后用「设置 → 售前助手」面板写入 ~/.dsh/presale/settings.json
+# 第二种优先于第一种：面板改动热生效，不用重启。
+- insert:
+    - id: dsh-presale
+      name: dsh-presale
+      config:
+        # 运行时设置文件（面板写入这里）。留空则自动取 ~/.dsh/presale/settings.json
+        settingsPath: !!js dshHomePath('presale/settings.json')
+        # 活动日志（每次触发/跳过/发送都记一条，面板可见）
+        activityPath: !!js dshHomePath('presale/activity.ndjson')
+        # 水位文件（记录已处理到哪条消息，重启不重放）
+        watermarkPath: !!js dshHomePath('presale/watermark.json')
+        # dws 可执行文件；'dws' 表示走 PATH
+        dwsPath: dws
+        # 组织/账号；留空 = 当前登录身份
+        profile: ''
+        # 首次装载不自动开始轮询：避免刚装上就往群里发消息
+        enabled: false
+        # 试运行：只记录「本该发什么」，不真发。确认无误后再关掉
+        dryRun: true

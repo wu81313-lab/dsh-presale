@@ -1,0 +1,56 @@
+{
+  "name": "dsh-presale",
+  "version": "0.1.0",
+  "private": false,
+  "type": "module",
+  "description": "DSH pre-sales assistant: watches DingTalk group messages you send yourself, then posts a customizable checklist or an AI requirement summary back into that group and @-mentions the inferred sales owner.",
+  "main": "./lib/index.js",
+  "exports": {
+    ".": {
+      "default": "./lib/index.js"
+    },
+    "./client": {
+      "default": "./client/client.js"
+    },
+    "./cordis.patch.yml": "./cordis.patch.yml",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib/**/*.js",
+    "client/**/*.js",
+    "cordis.patch.yml",
+    "README.md"
+  ],
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "inject": [
+        "@deepseek-ai/dsh-client-ui-slots"
+      ]
+    }
+  },
+  "engines": {
+    "node": "^22.19.0 || >=24.0.0"
+  },
+  "license": "MIT",
+  "author": "ruiduowu",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/wu81313-lab/dsh-presale.git"
+  },
+  "homepage": "https://github.com/wu81313-lab/dsh-presale#readme",
+  "bugs": {
+    "url": "https://github.com/wu81313-lab/dsh-presale/issues"
+  },
+  "keywords": [
+    "dsh",
+    "dsh-plugin",
+    "deepseek-harness",
+    "dingtalk",
+    "presales",
+    "dws"
+  ]
+}
