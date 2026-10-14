@@ -1,0 +1,6 @@
+url: https://github.com/wu81313-lab/dsh-presale
+name: wu81313-lab/dsh-presale
+category: notify
+description:
+  en: 'DingTalk group assistant: watches for trigger phrases in messages you send yourself, then posts a customizable multi-line checklist or an AI requirement summary back into that same conversation and @-mentions the sales owner inferred from recent chat.'
+  zh: '钉钉群助手：监听你本人发出的触发短语，自动在同一个会话里发可自定义的多行清单，或把近聊记录交给模型梳理成需求总结发回该群；并依据聊天记录判别销售人员后 @ 他。'
