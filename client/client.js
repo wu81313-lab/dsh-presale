@@ -75,6 +75,11 @@ window.__ModuleLoader__.load({
 .dsp-card { border: 1px solid var(--dsw-alias-border, rgba(128,128,128,.24)); border-radius: 12px; padding: 16px; background: var(--dsw-alias-bg-layer, transparent); }
 .dsp-card-title { font-size: 14px; font-weight: 600; margin: 0 0 4px; color: var(--dsw-alias-text-1, inherit); }
 .dsp-card-hint { font-size: 12px; line-height: 1.6; margin: 0 0 12px; color: var(--dsw-alias-text-3, rgba(128,128,128,.9)); }
+/* 折叠箭头：收起朝下、展开朝上。做成按钮以便键盘可达。 */
+.dsp-caret { display: inline-flex; align-items: center; justify-content: center; flex: none; width: 24px; height: 24px; padding: 0; border: 0; border-radius: 6px; background: 0 0; cursor: pointer; font: inherit; font-size: 13px; line-height: 1; color: var(--dsw-alias-label-secondary, rgba(128,128,128,.9)); transition: transform .16s, background .16s; }
+.dsp-caret:hover { background: var(--dsw-alias-bg-layer-2, rgba(128,128,128,.1)); }
+.dsp-caret:focus-visible { outline: 2px solid var(--dsw-alias-brand-primary, #0f1115); outline-offset: -1px; }
+.dsp-caret-open { transform: rotate(180deg); }
 .dsp-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .dsp-row + .dsp-row { margin-top: 10px; }
 .dsp-label { font-size: 13px; color: var(--dsw-alias-text-2, inherit); min-width: 128px; }
@@ -130,6 +135,24 @@ window.__ModuleLoader__.load({
       );
     }
 
+    /**
+     * 折叠开关：一个可点的小箭头。
+     *
+     * 用在「运行状态」上——那 8 项指标平时不用盯着看，默认收起能让整页短很多；
+     * 但异常时又要能一眼展开，所以箭头常驻、不做成"藏起来的交互"。
+     */
+    function Caret(props) {
+      const open = props.open === true;
+      return h('button', {
+        type: 'button',
+        className: `dsp-caret${open ? ' dsp-caret-open' : ''}`,
+        title: open ? '收起详情' : '展开详情',
+        'aria-expanded': open,
+        'aria-label': open ? '收起详情' : '展开详情',
+        onClick: props.onClick,
+      }, '▾');
+    }
+
     function Kv(props) {
       return h('div', { className: 'dsp-kv' },
         h('div', { className: 'dsp-kv-k' }, props.k),
@@ -155,6 +178,14 @@ window.__ModuleLoader__.load({
       const [busy, setBusy] = React.useState('');
       const [saved, setSaved] = React.useState('');
       const [attachmentStats, setAttachmentStats] = React.useState(null);
+      /**
+       * 「运行状态」的指标详情是否展开。
+       *
+       * 默认收起：那 8 项指标（周期数、水位、轮询间隔…）平时不用盯着看，
+       * 展开会把整页拉得很长。徽标行（监听中 / 身份已锚定）常驻可见，
+       * 所以收起状态下依然一眼能看出"它在不在工作"。
+       */
+      const [showDetails, setShowDetails] = React.useState(false);
       const dirtyRef = React.useRef(false);
 
       const refresh = React.useCallback(async () => {
@@ -269,22 +300,28 @@ window.__ModuleLoader__.load({
         // ── 状态 ──────────────────────────────────────────────
         h(Card, {
           title: '运行状态',
-          hint: '「只认我本人触发」是硬规则：只有你（下面的登录账号）发出的关键词才会被执行，其他人的同类消息会被跳过。',
         },
           h('div', { className: 'dsp-row' },
             ...badges.map(([kind, text], i) => h('span', { key: i, className: `dsp-badge dsp-badge-${kind}` }, text)),
+            h(Caret, { open: showDetails, onClick: () => setShowDetails(v => !v) }),
           ),
-          h('div', { className: 'dsp-grid', style: { marginTop: 14 } },
-            h(Kv, { k: '上次检查', v: `${humanTime(poller.lastSearchAt)}${relative(poller.lastSearchAt) ? `（${relative(poller.lastSearchAt)}）` : ''}` }),
-            h(Kv, { k: '上次命中', v: humanTime(poller.lastHitAt) }),
-            h(Kv, { k: '已完成周期', v: `${poller.cycles ?? 0} 次 / 命中 ${poller.hits ?? 0} 次` }),
-            h(Kv, { k: '当前轮询间隔', v: poller.currentIntervalSeconds > 0 ? `${poller.currentIntervalSeconds} 秒` : '尚未计算' }),
-            h(Kv, { k: '连续无命中', v: `${poller.consecutiveEmpty ?? 0} 轮（会自动拉长间隔省配额）` }),
-            h(Kv, { k: '消息水位', v: poller.watermark?.lastSeenText ?? '未初始化' }),
-            h(Kv, { k: '我的 openDingtalkId', v: h('span', { className: 'dsp-mono' }, id.myOid || '（未解析）') }),
-            h(Kv, { k: 'LLM 路由', v: llmInfo.route?.provider ? `${llmInfo.route.provider} / ${llmInfo.route.model}（${llmInfo.route.source}）` : '不可用' }),
-          ),
-          id.message ? h('div', { className: 'dsp-note', style: { marginTop: 12 } }, `身份说明：${id.message}`) : null,
+          showDetails ? h('div', null,
+            // 这段规则说明也放进详情：收起时只留一行徽标，整页短很多
+            h('p', { className: 'dsp-card-hint', style: { marginTop: 12 } },
+              '「只认我本人触发」是硬规则：只有你（上面的登录账号）发出的关键词才会被执行，其他人的同类消息会被跳过。'),
+            h('div', { className: 'dsp-grid' },
+              h(Kv, { k: '上次检查', v: `${humanTime(poller.lastSearchAt)}${relative(poller.lastSearchAt) ? `（${relative(poller.lastSearchAt)}）` : ''}` }),
+              h(Kv, { k: '上次命中', v: humanTime(poller.lastHitAt) }),
+              h(Kv, { k: '已完成周期', v: `${poller.cycles ?? 0} 次 / 命中 ${poller.hits ?? 0} 次` }),
+              h(Kv, { k: '当前轮询间隔', v: poller.currentIntervalSeconds > 0 ? `${poller.currentIntervalSeconds} 秒` : '尚未计算' }),
+              h(Kv, { k: '连续无命中', v: `${poller.consecutiveEmpty ?? 0} 轮（会自动拉长间隔省配额）` }),
+              h(Kv, { k: '消息水位', v: poller.watermark?.lastSeenText ?? '未初始化' }),
+              h(Kv, { k: '我的 openDingtalkId', v: h('span', { className: 'dsp-mono' }, id.myOid || '（未解析）') }),
+              h(Kv, { k: 'LLM 路由', v: llmInfo.route?.provider ? `${llmInfo.route.provider} / ${llmInfo.route.model}（${llmInfo.route.source}）` : '不可用' }),
+            ),
+            id.message ? h('div', { className: 'dsp-note', style: { marginTop: 12 } }, `身份说明：${id.message}`) : null,
+          ) : null,
+          // 出错与告警**不受折叠影响**：有问题必须直接看见，不能藏在详情里
           poller.lastError ? h('div', { className: 'dsp-note dsp-note-warn', style: { marginTop: 10 } }, `最近错误：${poller.lastError}`) : null,
           (status.settingsWarnings ?? []).length > 0
             ? h('div', { className: 'dsp-note dsp-note-warn', style: { marginTop: 10 } },

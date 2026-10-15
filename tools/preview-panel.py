@@ -25,34 +25,47 @@ CHROME_CANDIDATES = [
     r"C:\Program Files\Microsoft\Edge\Application\msedge.exe",
 ]
 
-# 与 client.js 的 Card 组件等价的普通卡片（卡片现在是常驻展开的，没有折叠态）。
-# 用「活动记录」当样本：它同时包含标题、说明、正文块，最能反映卡片排版。
+# 「运行状态」卡片的两态（与 client.js 的渲染结构一致）。
+# 收起：只有标题 + 徽标行 + 右侧箭头；展开：多出规则说明 + 8 项指标 + 身份说明。
+STATUS_COLLAPSED = """
+<section class="dsp-card">
+  <h3 class="dsp-card-title">运行状态</h3>
+  <div class="dsp-row">
+    <span class="dsp-badge dsp-badge-ok">监听中</span>
+    <span class="dsp-badge dsp-badge-ok">身份已锚定：吴瑞铎</span>
+    <button type="button" class="dsp-caret" title="展开详情">▾</button>
+  </div>
+</section>
+"""
+
+STATUS_EXPANDED = """
+<section class="dsp-card">
+  <h3 class="dsp-card-title">运行状态</h3>
+  <div class="dsp-row">
+    <span class="dsp-badge dsp-badge-ok">监听中</span>
+    <span class="dsp-badge dsp-badge-ok">身份已锚定：吴瑞铎</span>
+    <button type="button" class="dsp-caret dsp-caret-open" title="收起详情">▾</button>
+  </div>
+  <p class="dsp-card-hint" style="margin-top:12px">「只认我本人触发」是硬规则：只有你（上面的登录账号）发出的关键词才会被执行，其他人的同类消息会被跳过。</p>
+  <div class="dsp-grid">
+    <div><div class="dsp-kv-k">上次检查</div><div class="dsp-kv-v">2026/10/15 23:50:13（1 分钟前）</div></div>
+    <div><div class="dsp-kv-k">上次命中</div><div class="dsp-kv-v">从未</div></div>
+    <div><div class="dsp-kv-k">已完成周期</div><div class="dsp-kv-v">19 次 / 命中 0 次</div></div>
+    <div><div class="dsp-kv-k">当前轮询间隔</div><div class="dsp-kv-v">123 秒</div></div>
+    <div><div class="dsp-kv-k">连续无命中</div><div class="dsp-kv-v">19 轮（会自动拉长间隔省配额）</div></div>
+    <div><div class="dsp-kv-k">消息水位</div><div class="dsp-kv-v">2026/10/15 23:50:12</div></div>
+    <div><div class="dsp-kv-k">我的 openDingtalkId</div><div class="dsp-kv-v dsp-mono">D8HS2Vhb…XXdD</div></div>
+    <div><div class="dsp-kv-k">LLM 路由</div><div class="dsp-kv-v">deepseek-account / deepseek-flash（default）</div></div>
+  </div>
+</section>
+"""
+
+# 与 client.js 的 Card 组件等价的普通卡片
 CARD_SAMPLE = """
 <section class="dsp-card">
   <h3 class="dsp-card-title">活动记录</h3>
   <p class="dsp-card-hint">每轮「发现 → 判定 → 发送/跳过」都记一条。试运行模式下这里是唯一的观察窗口。</p>
   <div class="dsp-row"><span class="dsp-note">暂无记录。若你刚在群里发过关键词，可点上面的「立即检查一次」。</span></div>
-</section>
-"""
-
-# 带表单字段的卡片：确认输入框高度、字段间距、提示文字排版
-CARD_FORM = """
-<section class="dsp-card">
-  <h3 class="dsp-card-title">动作二设置</h3>
-  <p class="dsp-card-hint">提示词可自定义：改这里就能调整总结的口径、结构与详略。</p>
-  <div class="dsp-row">
-    <div class="dsp-label">触发关键词</div>
-    <input class="dsp-input" value="梳理项目需求">
-  </div>
-  <div class="dsp-row">
-    <div class="dsp-label">读取消息条数</div>
-    <input class="dsp-input" value="200">
-  </div>
-  <div class="dsp-row">
-    <div class="dsp-label">总结提示词</div>
-    <textarea class="dsp-textarea">你是{company}的售前技术支持…</textarea>
-    <div class="dsp-card-hint" style="flex:1 1 100%;margin:2px 0 0 0">改这里就能调整总结的口径。</div>
-  </div>
 </section>
 """
 
@@ -113,12 +126,16 @@ body { margin: 0; padding: 24px; background: #f1f3f5; }
 </style></head>
 <body>
   <div class="pane">
-    <h2>① 普通卡片（标题 + 说明 + 正文块）</h2>
-    <div class="surface"><div class="dsp-root">{CARD_SAMPLE}</div></div>
+    <h2>① 运行状态 · 收起（默认）</h2>
+    <div class="surface"><div class="dsp-root">{STATUS_COLLAPSED}</div></div>
   </div>
   <div class="pane">
-    <h2>② 带表单字段的卡片（确认输入框高度与字段间距）</h2>
-    <div class="surface"><div class="dsp-root">{CARD_FORM}</div></div>
+    <h2>② 运行状态 · 展开（点右侧箭头）</h2>
+    <div class="surface"><div class="dsp-root">{STATUS_EXPANDED}</div></div>
+  </div>
+  <div class="pane">
+    <h2>③ 对照：普通卡片不受影响</h2>
+    <div class="surface"><div class="dsp-root">{CARD_SAMPLE}</div></div>
   </div>
 </body></html>
 """
