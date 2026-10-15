@@ -24,3 +24,6 @@ Thumbs.db
 *.log
 npm-debug.log*
 *.tmp
+
+# 改版时留下的本地备份，不进仓库
+client/*.bak-*

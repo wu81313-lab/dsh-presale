@@ -156,8 +156,44 @@ if (registrations.length > 0) {
 
 check('注入了样式（跟随主题令牌）', styleTags.length === 1, `实际 ${styleTags.length}`);
 if (styleTags.length === 1) {
-  check('样式只用 DSH 设计令牌，不写死颜色', styleTags[0].textContent.includes('--dsw-'), '未发现 --dsw- 令牌');
-  check('样式作用域带 dsp- 前缀（不污染宿主）', styleTags[0].textContent.includes('.dsp-'));
+  const css = styleTags[0].textContent;
+  check('样式只用 DSH 设计令牌，不写死颜色', css.includes('--dsw-'), '未发现 --dsw- 令牌');
+  check('样式作用域带 dsp- 前缀（不污染宿主）', css.includes('.dsp-'));
+
+  // ── 令牌名必须真实存在 ──────────────────────────────────────
+  //
+  // 这条是**踩坑换来的**：早前 CSS 里用的是 `--dsw-alias-border` /
+  // `--dsw-alias-text-1` / `--dsw-alias-brand` 这类**猜测名**，而真实令牌是
+  // `--dsw-alias-border-l1` / `--dsw-alias-label-primary` / `--dsw-alias-brand-primary`。
+  // 写错**不会报错**，只会静默走兜底值——于是「跟随主题」形同虚设，
+  // 换深浅色面板也不跟着变。所以这里对照真实令牌表逐个校验。
+  //
+  // 令牌表来源：cordis_inspect_query(client / Theme / listTokens)
+  const THEME_TOKENS = new Set([
+    '--dsw-alias-bg-base',
+    '--dsw-alias-bg-layer-1',
+    '--dsw-alias-bg-layer-2',
+    '--dsw-alias-bg-overlay',
+    '--dsw-alias-border-l1',
+    '--dsw-alias-border-l2',
+    '--dsw-alias-brand-primary',
+    '--dsw-alias-label-primary',
+    '--dsw-alias-label-secondary',
+    '--dsw-alias-state-error-primary',
+    '--dsw-alias-state-idle-primary',
+    '--dsw-alias-state-success-primary',
+    '--dsw-alias-state-warn-primary',
+    '--dsw-specific-sidebar-fill',
+  ]);
+  // 只看 CSS 部分：注释里会举反例（提到错误的旧名字），不该被算进来
+  const cssWithoutComments = css.replace(/\/\*[\s\S]*?\*\//gu, '').replace(/^\s*\/\/.*$/gmu, '');
+  const usedTokens = [...new Set(cssWithoutComments.match(/--dsw-[a-z0-9-]+/gu) ?? [])];
+  const unknownTokens = usedTokens.filter(t => !THEME_TOKENS.has(t));
+  check(
+    '样式里的令牌名都是 DSH 真实令牌（防止静默失效）',
+    unknownTokens.length === 0,
+    unknownTokens.length > 0 ? `未知令牌：${unknownTokens.join('、')}` : `共 ${usedTokens.length} 个`,
+  );
 }
 
 // ── 渲染一次面板（不装 React，只验证组件能被调用不抛错）───────
