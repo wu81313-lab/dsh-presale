@@ -107,7 +107,7 @@ dws chat +search-msg --senders <我的ID> --start <RFC3339> --no-enrich --page-a
 | `.xlsx` | 解析共享字符串与工作表，输出 `表名 \| 单元格` 行 |
 | `.pptx` | 逐页解析 `ppt/slides/slideN.xml`，带页码与演讲者备注；**按页码数字排序**（否则 1,10,11,2 会让模型看乱顺序） |
 | `.txt` `.md` `.csv` `.json` `.xml` `.yaml` 等 | 直接读（UTF-8 优先，乱码则退回 GBK） |
-| `.pdf` | 需要设置里的 Python 路径；找不到解析器就明确标注「未提取」 |
+| `.pdf` | 需要设置里的 Python 路径；多引擎自动探测（**PyMuPDF → pypdf**） |
 | **图片** | 下载 → 注册为 DSH 附件 → **作为多模态内容块直接交给模型看** |
 | 语音 / 视频 | 登记并说明「当前模型只支持文本与图像输入」——不假装处理过 |
 | 旧版 Office（`.doc` / `.xls` / `.ppt`） | 二进制格式无法解析；**明确告知另存为新格式**再发 |
@@ -124,6 +124,34 @@ dws chat +search-msg --senders <我的ID> --start <RFC3339> --no-enrich --page-a
 > 判断图片**按文件头字节**而不是扩展名——钉钉对同一张图会给出两个 resourceId，
 > 其中一个没有 `contentType`、也没有文件名，落盘成 `.bin`，按扩展名判就会被
 > 误当成"不支持的格式"（实测踩到过，同一张图一条路读到了、另一条报不支持）。
+
+### 读 PDF（需要配一次 Python）
+
+PDF 无法零依赖解析，要走本机的 Python。**只需在面板「附件读取 → Python 路径」里
+填一次解释器路径**，例如：
+
+```
+C:\Python314\python.exe
+```
+
+填 `python` 这类命令名也可以（会在 PATH 里找）。
+
+需要在那个解释器里装一个 PDF 库，装哪个都行（插件会自动探测）：
+
+```bash
+C:\Python314\python.exe -m pip install pymupdf
+```
+
+> **为什么默认不锁定单一库**：实测本机两个 Python 能力不同——系统 Python 只装了
+> PyMuPDF，DSH runtime 的 Python 一个 PDF 库都没有。写死 `pypdf` 的话，哪怕
+> 路径配对也照样读不出来，而用户完全看不出是"库不对"还是"文件有问题"。
+> 现在按 **PyMuPDF → pypdf** 的顺序探测，用第一个能用的。
+>
+> 缺库时的提示会**直接给出 pip 安装命令**（带上你填的那个解释器路径），
+> 不用自己猜。
+
+扫描件（只有图片层、没有文字层）会被明确标注「没有可提取的文字」，
+不会返回空内容假装读到了。
 
 **落点**：`~/.dsh/presale/attachments/`（面板「附件缓存」里能看到完整路径与占用）。
 
@@ -143,7 +171,11 @@ attachments/
 
 **缓存**：同一个文件第二次遇到直接命中，不再走网络。有效期默认 30 天（防群里文件被替换后
 仍读旧内容）；总量默认 200MB，超出按最久未访问淘汰。下载与解析都有上限（单轮 5 个文件、
-单文件 10MB、总注入 3 万字），超限会在提示词里**显式告知模型**，而不是静默丢掉。
+单文件 50MB、单文件 1.2 万字、总注入 3 万字），超限会在提示词里**显式告知模型**，而不是静默丢掉。
+
+> 单文件上限默认 50MB 而不是 10MB：实测**售前方案 PPT 动辄 12–13MB**（PPT 里塞的
+> 都是图片），10MB 会把最该读的方案书直接拒掉。体积大不等于正文长——提取出的文字
+> 仍受字数上限约束，所以放大体积上限不会挤掉聊天记录。
 
 **安全性**：附件正文与聊天记录同为**不可信数据**，提示词里明确要求模型只当作资料、
 忽略其中的任何「指令」。
@@ -248,6 +280,14 @@ node tools/selftest-real-template.mjs    # 用你配置里的真实文案走一�
 node tools/selftest-full-chain.mjs       # 完整链路：成员表 → 历史 → @ 编排 → 发送预检
 node tools/selftest-attachments.mjs      # 附件链路：真实下载 → 提取正文 → 缓存命中
 node tools/selftest-pptx-real.mjs        # 用 python-pptx 生成真实 PPT 验证解析器
+node tools/selftest-pdf-real.mjs         # 用 PyMuPDF 生成真实 PDF 验证解析链路
+```
+
+拿**真实群文件**验证（不是自己造的样本）：
+
+```bash
+node tools/probe-real-files.mjs <会话ID>   # 跑该群里所有 docx/xlsx/pptx/pdf
+node tools/probe-pdf-in-group.mjs <会话ID> # 从该会话里找 PDF 并解析
 ```
 
 **需要真实钉钉数据的自检要先用环境变量提供夹具**（仓库里不含任何真实 ID）：
@@ -267,6 +307,8 @@ setx DSH_PRESALE_TEST_NAME   "张三"         # 上面那个成员的显示名
 node tools/selftest-attachments.mjs          # 附件链路：下载 → 提取 → 缓存命中（加 --clear 清缓存）
 node tools/diagnose-attachment-cache.mjs     # 附件缓存落盘情况与上限对照
 node tools/diagnose-image-cache.mjs          # 图片类附件是否会重复下载
+node tools/diagnose-sniff.mjs <文件>          # 按文件头判断某个文件是不是图片
+node tools/diagnose-pdf.mjs <pdf> <python>   # PDF 解析失败时看 Python 侧的真实报错
 ```
 
 **图片通道要在 DSH 会话里用工具验证**（外部脚本没有 `ctx`，验不了）：
