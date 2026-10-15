@@ -156,6 +156,7 @@ window.__ModuleLoader__.load({
       const [saved, setSaved] = React.useState('');
       const [testResult, setTestResult] = React.useState(null);
       const [testConversation, setTestConversation] = React.useState('');
+      const [attachmentStats, setAttachmentStats] = React.useState(null);
       const dirtyRef = React.useRef(false);
 
       const refresh = React.useCallback(async () => {
@@ -220,10 +221,22 @@ window.__ModuleLoader__.load({
           await api(path, { method: 'POST', body });
           setError('');
           await refresh();
+          // 清空缓存后顺手刷新用量，让用户立刻看到结果
+          if (path === '/attachments/clear') await loadAttachments();
         } catch (err) {
           setError(err.message);
         } finally {
           setBusy('');
+        }
+      }
+
+      /** 拉取附件缓存用量（面板展示，不轮询——缓存变化不频繁，手动刷新即可）。 */
+      async function loadAttachments() {
+        try {
+          setAttachmentStats(await api('/attachments'));
+          setError('');
+        } catch (err) {
+          setError(`读取附件缓存失败：${err.message}`);
         }
       }
 
@@ -675,6 +688,102 @@ window.__ModuleLoader__.load({
           ),
         ),
 
+        // ── 附件读取 ──────────────────────────────────────────
+        h(Card, {
+          title: '附件读取',
+          hint: '钉钉服务端没有「在线读文件正文」的接口，文件必须先下载到本地才能解析。开启后，「梳理项目需求」会把群里的 docx / xlsx / txt 下载并提取正文交给模型——很多人只在群里丢一个需求文档就完事，不读附件等于漏掉核心需求。',
+        },
+          h(Field, { label: '读取群文件', hint: '关闭则只依据聊天文字，文件仅记录不解析。' },
+            h('input', {
+              type: 'checkbox',
+              checked: settings.attachments.enabled,
+              onChange: e => edit('attachments.enabled', e.target.checked),
+            }),
+          ),
+          h(Field, { label: '单轮文件数上限', hint: '防止一个群刷了几十个附件的极端情况。默认 5。' },
+            h('input', {
+              className: 'dsp-input',
+              type: 'number',
+              min: 1,
+              max: 50,
+              value: settings.attachments.maxFilesPerRun,
+              onChange: e => edit('attachments.maxFilesPerRun', Number(e.target.value)),
+            }),
+          ),
+          h(Field, { label: '单文件大小上限（字节）', hint: '超过就跳过并记明原因。默认 10MB。' },
+            h('input', {
+              className: 'dsp-input',
+              type: 'number',
+              min: 1024,
+              value: settings.attachments.maxFileBytes,
+              onChange: e => edit('attachments.maxFileBytes', Number(e.target.value)),
+            }),
+          ),
+          h(Field, { label: '单文件注入字数上限', hint: '默认 12000 字。表格类文件往往很长，适当限制可避免挤掉聊天记录。' },
+            h('input', {
+              className: 'dsp-input',
+              type: 'number',
+              min: 500,
+              value: settings.attachments.maxCharsPerFile,
+              onChange: e => edit('attachments.maxCharsPerFile', Number(e.target.value)),
+            }),
+          ),
+          h(Field, { label: '全部附件总字数上限', hint: '默认 30000 字。超出会按顺序截断，并在提示词里显式告知模型。' },
+            h('input', {
+              className: 'dsp-input',
+              type: 'number',
+              min: 1000,
+              value: settings.attachments.maxTotalChars,
+              onChange: e => edit('attachments.maxTotalChars', Number(e.target.value)),
+            }),
+          ),
+          h(Field, { label: '缓存有效期（天）', hint: '超期会重新下载，避免群里文件被替换后仍读旧内容。默认 30 天，填 0 表示永不过期。' },
+            h('input', {
+              className: 'dsp-input',
+              type: 'number',
+              min: 0,
+              max: 3650,
+              value: settings.attachments.cacheTtlDays,
+              onChange: e => edit('attachments.cacheTtlDays', Number(e.target.value)),
+            }),
+          ),
+          h(Field, { label: 'Python 路径（可选）', hint: '只用于解析 PDF。留空则不尝试解析 PDF——找不到解析器时会明确标注「未提取」，不会假装读过。' },
+            h('input', {
+              className: 'dsp-input',
+              value: settings.attachments.pythonPath ?? '',
+              placeholder: '留空 = 不解析 PDF',
+              onChange: e => edit('attachments.pythonPath', e.target.value),
+            }),
+          ),
+        ),
+
+        // ── 附件缓存 ──────────────────────────────────────────
+        h(Card, {
+          title: '附件缓存',
+          hint: '下载的文件与提取出的文本都缓存在这里，同一个文件第二次遇到会直接命中缓存、不再走网络。',
+        },
+          h('div', { className: 'dsp-actions', style: { marginBottom: 10 } },
+            h('button', { className: 'dsp-btn', onClick: () => void loadAttachments() }, '刷新用量'),
+            h('button', { className: 'dsp-btn dsp-btn-danger', disabled: busy !== '', onClick: () => void act('attachclear', '/attachments/clear') }, '清空缓存'),
+          ),
+          attachmentStats === null
+            ? h('div', { className: 'dsp-note' }, '点「刷新用量」查看缓存占用。')
+            : h('div', null,
+                h('div', { className: 'dsp-card-hint', style: { margin: '0 0 6px 0' } },
+                  `占用 ${(attachmentStats.totalBytes / 1024 / 1024).toFixed(2)} MB｜${attachmentStats.entryCount} 个条目｜${attachmentStats.fileCount} 个文件`),
+                h('div', { className: 'dsp-mono', style: { marginBottom: 8 } }, attachmentStats.cacheDir || '（未启用）'),
+                attachmentStats.entries.length === 0
+                  ? h('div', { className: 'dsp-card-hint', style: { margin: 0 } }, '缓存为空。')
+                  : h('div', null,
+                      ...attachmentStats.entries.slice(0, 20).map((entry, i) => h('div', {
+                        key: entry.hash ?? i,
+                        className: 'dsp-card-hint',
+                        style: { margin: '2px 0 0 0' },
+                      }, `${entry.name}｜${(entry.bytes / 1024).toFixed(1)}KB｜最后访问 ${entry.lastUsedText}`)),
+                    ),
+              ),
+        ),
+
         // ── 活动记录 ──────────────────────────────────────────
         h(Card, {
           title: '活动记录',
@@ -702,6 +811,17 @@ window.__ModuleLoader__.load({
                   e.triggerText ? h('div', { style: { marginTop: 2 } }, `触发：${e.triggerText}`) : null,
                   e.mention && e.mention.mode && e.mention.mode !== 'none'
                     ? h('div', { style: { marginTop: 2 } }, `@：${e.mention.name || '?'}（${e.mention.mode}${e.mention.confidence ? ` / ${e.mention.confidence}` : ''}）— ${e.mention.reason ?? ''}`)
+                    : null,
+                  // 附件处理结果：排查「模型为什么没读到某个文件」时这是唯一线索
+                  Array.isArray(e.attachments) && e.attachments.length > 0
+                    ? h('div', { style: { marginTop: 4 } },
+                        h('div', { className: 'dsp-card-hint', style: { margin: 0 } }, `附件（${e.attachmentSummary || ''}）：`),
+                        ...e.attachments.map((a, ai) => h('div', {
+                          key: ai,
+                          className: 'dsp-card-hint',
+                          style: { margin: '2px 0 0 12px' },
+                        }, `${a.status === 'ok' ? '✔' : a.status === 'error' ? '✖' : 'ℹ'} ${a.name}｜${(a.size / 1024).toFixed(1)}KB｜提取 ${a.chars} 字${a.fromCache ? '｜缓存命中' : ''}${a.note ? `｜${a.note}` : ''}`)),
+                      )
                     : null,
                   e.error ? h('div', { style: { marginTop: 2, color: 'var(--dsw-alias-danger, #d64545)' } }, `错误：${e.error}`) : null,
                   e.note ? h('div', { className: 'dsp-card-hint', style: { margin: '2px 0 0 0' } }, e.note) : null,

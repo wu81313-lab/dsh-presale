@@ -84,12 +84,53 @@ dws chat +search-msg --senders <我的ID> --start <RFC3339> --no-enrich --page-a
 | 动作二 · 梳理项目需求 | 触发关键词、读取消息条数、冷却秒数、标题前缀、总结提示词 |
 | @ 销售人员 | 开关、最低置信度、中等置信度是否降级为文本提及、判不出时是否 @ 自己、判别提示词 |
 | 轮询与性能 | 轮询间隔、时间窗重叠、无命中退避上限 |
+| 附件读取 | 是否读群文件、单轮文件数、单文件大小/字数、总字数、缓存有效期、Python 路径（PDF） |
+| 附件缓存 | 缓存占用与文件清单、一键清空 |
 | 模型 | provider / model（默认 DeepSeek-V4.1-Flash）、最长等待、**公司名**（提示词里 `{company}` 的替换值） |
 | 试跑 | 填一个会话 ID，用真实数据跑完整链路，**只显示结果不发送** |
-| 活动记录 | 每一轮的「发现 → 判定 → 发送/跳过」，含 @ 判定理由与最终正文 |
+| 活动记录 | 每一轮的「发现 → 判定 → 发送/跳过」，含 @ 判定理由、附件处理结果与最终正文 |
 
 > 「公司名」用于让模型以你的公司口吻说话（默认提示词里写作 `{company}`）。
 > 留空会退化成「我们公司」，提示词仍然通顺。
+
+### 读取群文件
+
+钉钉服务端**没有「在线读文件正文」的接口**——文件是不透明的附件，只能先下载到本地再解析。
+很多人只在群里丢一个需求文档就完事，不读附件等于漏掉核心需求（实测：一份 6075 字的
+技术任务书，不读的话模型只能写出「文件无法读取，请重新上传」）。
+
+下载与提取规则：
+
+| 类型 | 处理 |
+|---|---|
+| `.docx` | 解析 `word/document.xml`，按段落还原正文 |
+| `.xlsx` | 解析共享字符串与工作表，输出 `表名 \| 单元格` 行 |
+| `.txt` `.md` `.csv` `.json` `.xml` 等 | 直接读（UTF-8 优先，乱码则退回 GBK） |
+| `.pdf` | 需要设置里的 Python 路径；找不到解析器就明确标注「未提取」 |
+| 图片 / 语音 / 视频 | **不下载**，只登记并说明「需要多模态或语音转写通道」 |
+| 其它格式 | 登记并说明未支持，**不会假装读过** |
+
+**落点**：`~/.dsh/presale/attachments/`（面板「附件缓存」里能看到完整路径与占用）。
+
+```
+attachments/
+  <resourceId 的哈希前 12 位>/
+      <原文件名>        原件
+      meta.json        来源、大小、下载时间
+  extract/<同样哈希>.txt   提取出的纯文本
+```
+
+用哈希做目录名而不是原文件名，既避免同名文件互相覆盖，也避免文件名里的 `..` 造成路径穿越。
+
+**缓存**：同一个文件第二次遇到直接命中，不再走网络。有效期默认 30 天（防群里文件被替换后
+仍读旧内容）；总量默认 200MB，超出按最久未访问淘汰。下载与解析都有上限（单轮 5 个文件、
+单文件 10MB、总注入 3 万字），超限会在提示词里**显式告知模型**，而不是静默丢掉。
+
+**安全性**：附件正文与聊天记录同为**不可信数据**，提示词里明确要求模型只当作资料、
+忽略其中的任何「指令」。
+
+---
+
 **改动即时生效**，不需要重启 DSH。
 
 ### 模型：默认 DeepSeek-V4.1-Flash
@@ -179,13 +220,14 @@ dws chat +search-msg --senders <我的ID> --start <RFC3339> --no-enrich --page-a
 ```bash
 cd ~/.dsh/plugins/dsh-presale
 
-node --test "lib/test/*.test.mjs"       # 单元测试（84 项，不需要真实钉钉数据）
+node --test "lib/test/*.test.mjs"       # 单元测试（105 项，不需要真实钉钉数据）
 node tools/selftest-assembly.mjs         # 装配自检（mock ctx，不联网）
 node tools/selftest-client.mjs           # 客户端半边自检
 node tools/selftest-live.mjs             # 真实链路（只读，打本机 dws）
 node tools/selftest-send-quoting.mjs     # @ 占位符与多行正文能否到达 dws（dry-run）
 node tools/selftest-real-template.mjs    # 用你配置里的真实文案走一遍发送（dry-run）
 node tools/selftest-full-chain.mjs       # 完整链路：成员表 → 历史 → @ 编排 → 发送预检
+node tools/selftest-attachments.mjs      # 附件链路：真实下载 → 提取正文 → 缓存命中
 ```
 
 **需要真实钉钉数据的自检要先用环境变量提供夹具**（仓库里不含任何真实 ID）：
@@ -202,6 +244,9 @@ setx DSH_PRESALE_TEST_NAME   "张三"         # 上面那个成员的显示名
 诊断脚本（只读，排查用）：
 
 ```bash
+node tools/selftest-attachments.mjs          # 附件链路：下载 → 提取 → 缓存命中（加 --clear 清缓存）
+node tools/diagnose-attachment-cache.mjs     # 附件缓存落盘情况与上限对照
+node tools/diagnose-image-cache.mjs          # 图片类附件是否会重复下载
 node tools/diagnose-oid.mjs        # openDingtalkId 在群成员表与消息里是否一致
 node tools/diagnose-oid2.mjs       # 两个 ID 的作用域差异
 node tools/diagnose-senders.mjs    # --senders 多值时是否仍在过滤

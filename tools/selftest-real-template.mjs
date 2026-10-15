@@ -14,6 +14,7 @@ import { join } from 'node:path';
 import { createSettings } from '../lib/settings.js';
 import { createSender, mentionPlaceholder } from '../lib/send.js';
 import { resolveDwsExecutable } from '../lib/dws.js';
+import { TEST_GROUP, TEST_OID, requireFixtures } from './fixtures.mjs';
 
 const home = process.env.DSH_HOME ?? join(process.env.USERPROFILE ?? '', '.dsh');
 const realSettingsPath = join(home, 'presale', 'settings.json');
@@ -43,6 +44,11 @@ const GROUP = TEST_GROUP; // 测试群由环境变量提供（见 tools/fixtures
 const OID = TEST_OID;
 
 try {
+  const ready = requireFixtures(['DSH_PRESALE_TEST_GROUP', 'DSH_PRESALE_TEST_OID']);
+  if (!ready) {
+    console.log('==== 用真实配置文案走发送链路的检查已跳过 ====');
+    process.exitCode = 0;
+  } else {
   console.log('== 环境 ==');
   const resolved = resolveDwsExecutable('dws');
   console.log(`  dws 可执行文件：${resolved.path}`);
@@ -65,10 +71,12 @@ try {
     }
     check('正文在 dws 侧完整还原（换行没丢）', inner === template,
       inner === template ? `${inner.split('\n').length} 行完整` : `期望 ${template.length} 字，实际 ${String(inner).length} 字`);
-    check('首行内容正确', String(inner).startsWith('为了能准确评估这个项目'),
-      JSON.stringify(String(inner).slice(0, 30)));
-    check('末行内容正确', String(inner).trimEnd().endsWith('发出'),
-      JSON.stringify(String(inner).slice(-20)));
+    // 刻意不断言具体文字：文案是用户自己编辑的，写死首末句会让测试在他们改文案后
+    // 假报警（已踩到过）。真正要保证的是"逐字节完整还原"，上面那条已经覆盖；
+    // 这里只额外确认首末行非空，能发现"开头/结尾被吃掉"这类截断。
+    const lines = String(inner).split('\n');
+    check('首行非空', lines[0].trim().length > 0, JSON.stringify(lines[0].slice(0, 30)));
+    check('末行非空', lines[lines.length - 1].trim().length > 0, JSON.stringify(lines[lines.length - 1].slice(0, 30)));
   }
 
   console.log('\n== 带 @ 的发送（dry-run）==');
@@ -94,6 +102,7 @@ try {
   check('空正文被拒', empty.ok === false, empty.error.slice(0, 40));
   const missingPlaceholder = await sender.send({ conversationId: GROUP, text: '没有占位符', mentionIds: [OID], preview: true });
   check('要 @ 但无占位符被拒', missingPlaceholder.ok === false, missingPlaceholder.error.slice(0, 50));
+  }
 } catch (error) {
   failures += 1;
   console.log(`\n✖ 抛出异常：${error.stack ?? error.message}`);

@@ -12,7 +12,7 @@ import { runDws } from '../lib/dws.js';
 import { pickConversationId, pickString, unwrapDwsPayload } from '../lib/util.js';
 
 const logger = { info: () => {}, warn: (...a) => console.log('  [warn]', ...a), error: () => {} };
-const MY_NAME = '吴瑞铎';
+const MY_NAME = '张三';
 
 const run = (args, timeoutMs = 60000) => runDws({ dwsPath: 'dws', args, timeoutMs, logger });
 

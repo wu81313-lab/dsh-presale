@@ -101,20 +101,38 @@ try {
       }
     }
 
-    // 单独确认别名 ID 确实能搜出东西（证明收别名是必要的，不是画蛇添足）
-    if ((id.aliasIds ?? []).length > 0) {
-      const aliasOnly = createDiscoverer({
-        getSettings: () => settings.get(),
-        getIdentity: () => ({ myOid: id.aliasIds[0], aliasIds: [] }),
-        logger,
-      });
-      const aliasResult = await aliasOnly.searchMine({
-        startMs: Date.now() - 30 * 24 * 60 * 60 * 1000,
-        endMs: Date.now(),
-      });
-      if (aliasResult.ok) {
-        console.log(`    别名 ID 单独搜索（30 天）：${aliasResult.messages.length} 条`);
-        check('别名 ID 能捞出主 ID 捞不到的消息（所以必须收别名）', aliasResult.messages.length > 0, '0 条');
+    // 确认别名 ID 确实能搜出东西（证明收别名是必要的，不是画蛇添足）。
+    //
+    // ⚠️ 这条**不能断言"一定有消息"**：别名是单聊作用域的 ID，
+    // 如果最近没在单聊里说过话，30 天窗口内就是 0 条——那是数据事实，
+    // 不是代码缺陷。之前写死断言，导致测试随环境时好时坏（已踩到）。
+    // 正确做法：遍历所有别名，只要能捞到就给出更强结论；全都捞不到就如实报告。
+    const aliases = id.aliasIds ?? [];
+    if (aliases.length > 0) {
+      let totalFromAliases = 0;
+      let hitAlias = '';
+      for (const alias of aliases) {
+        const aliasOnly = createDiscoverer({
+          getSettings: () => settings.get(),
+          getIdentity: () => ({ myOid: alias, aliasIds: [] }),
+          logger,
+        });
+        // eslint-disable-next-line no-await-in-loop
+        const aliasResult = await aliasOnly.searchMine({
+          startMs: Date.now() - 30 * 24 * 60 * 60 * 1000,
+          endMs: Date.now(),
+        });
+        if (aliasResult.ok && aliasResult.messages.length > 0) {
+          totalFromAliases += aliasResult.messages.length;
+          if (hitAlias.length === 0) hitAlias = alias;
+        }
+      }
+      if (hitAlias.length > 0) {
+        console.log(`    别名单独搜索命中 ${totalFromAliases} 条（首个命中的别名：${hitAlias.slice(0, 16)}…）`);
+        check('别名 ID 能捞出消息（收别名是必要的）', true, `${totalFromAliases} 条`);
+      } else {
+        console.log(`    ${aliases.length} 个别名在 30 天内都没有消息`);
+        console.log('    （这是数据事实而非缺陷：别名是单聊作用域的 ID，最近没在单聊里发言就搜不到）');
       }
     }
   }
@@ -158,7 +176,7 @@ try {
   for (const [text, expected] of samples) {
     const matched = discoverer.matchTriggers([{
       messageId: `t-${text}`, conversationId: 'cidTest', createTime: '', createTimeMs: Date.now(),
-      sender: '吴瑞铎', senderId: id.myOid, text, textNorm: (await import('../lib/util.js')).normalizeText(text),
+      sender: '张三', senderId: id.myOid, text, textNorm: (await import('../lib/util.js')).normalizeText(text),
       aiSendFlag: '', quoted: null,
     }]);
     const hit = matched.provide.length > 0 ? 'provide' : matched.summarize.length > 0 ? 'summarize' : null;
