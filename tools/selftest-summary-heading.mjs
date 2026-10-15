@@ -7,7 +7,7 @@
 //
 // 运行：node tools/selftest-summary-heading.mjs
 
-import { createLlm, stripLeadingHeading } from '../lib/llm.js';
+import { createLlm, stripLeadingHeading, stripSourceCitations } from '../lib/llm.js';
 import { defaultSettings } from '../lib/config.js';
 
 let failures = 0;
@@ -96,9 +96,29 @@ console.log('\n== 断言 ==');
 const titleCount = (text.match(/需求梳理/gu) ?? []).length;
 check('标题只出现一次（不再重复）', titleCount === 1, `「需求梳理」出现 ${titleCount} 次`);
 check('保留了配置里的标题', text.includes('【项目需求梳理】'));
-check('标注了会话', text.includes(`会话：${conversation}`));
-check('正文完整保留', text.includes('一、客户与场景') && text.includes('1. 追溯。'));
-check('没有连续两行标题', !/\n\s*\n\s*[^\n]*需求梳理[^\n]*\n[^\n]*\n/u.test(text.split('会话：')[1] ?? ''));
+check('不再输出「会话：xxx」行（用户要求去掉）', !text.includes('会话：'), JSON.stringify(text.split('\n')[1] ?? ''));
+check('正文完整保留', text.includes('客户与场景') && text.includes('明确的需求') && text.includes('追溯。'),
+  JSON.stringify(text.slice(0, 60)));
+check('正文紧跟在标题之后', text.split('\n')[1] === '一、客户与场景', JSON.stringify(text.split('\n')[1] ?? ''));
 
-console.log(`\n==== ${failures === 0 ? '标题拼接验证通过' : `验证失败 ${failures} 项`} ====`);
+console.log('\n== 引用依据必须被清掉 ==');
+const withCitations = [
+  '【项目需求梳理】',
+  '1. 重构追溯平台（需求docx）。',
+  '2. 报价总计113000元（报价.xlsx）。',
+  '据《某需求.docx》',
+  '来源：群聊记录',
+  '6. 核心依据：《某需求.docx》《某报价.xlsx》。',
+  '3. 正常条目（预算5万）。',
+].join('\n');
+const cleaned = stripSourceCitations(withCitations);
+console.log('  清理后：');
+for (const line of cleaned.split('\n')) console.log(`    ${line}`);
+check('不存在句末括号引用', !/[（(][^）)]*(docx|xlsx|pptx)[^）)]*[)）]/iu.test(cleaned));
+check('不存在「据《》」整行', !/^据\s*[《【]/mu.test(cleaned));
+check('不存在「来源：」整行', !/^(来源|依据|出处)\s*[:：]/mu.test(cleaned));
+check('不留被掏空的残句（如「6. 核心。」）', !/\d+[.、)]\s*\S{0,4}\s*$/mu.test(cleaned), cleaned);
+check('正常条目未被误删', cleaned.includes('正常条目（预算5万）'));
+
+console.log(`\n==== ${failures === 0 ? '标题拼接与引用清理验证通过' : `验证失败 ${failures} 项`} ====`);
 process.exitCode = failures === 0 ? 0 : 1;
