@@ -25,37 +25,34 @@ CHROME_CANDIDATES = [
     r"C:\Program Files\Microsoft\Edge\Application\msedge.exe",
 ]
 
-# 折叠卡片在收起 / 展开两种状态下的 DOM（与 client.js 的 Card 组件一致）
-CARD_COLLAPSED = """
-<section class="dsp-card">
-  <div class="dsp-card-head dsp-card-head-btn">
-    <h3 class="dsp-card-title">几点要知道的</h3>
-    <span class="dsp-caret">▾</span>
-  </div>
-</section>
-"""
-
-CARD_EXPANDED = """
-<section class="dsp-card">
-  <div class="dsp-card-head dsp-card-head-btn">
-    <h3 class="dsp-card-title">几点要知道的</h3>
-    <span class="dsp-caret dsp-caret-open">▾</span>
-  </div>
-  <ul style="margin:0;padding-left:20px;font-size:13px;line-height:1.9">
-    <li>触发条件严格限定为「你自己发的消息」——同事在群里说同样的话不会有任何反应，这是设计如此。</li>
-    <li>@ 必须在正文里用 &lt;@openDingtalkId&gt; 占位符，这是钉钉的硬要求，插件已自动处理；若 @ 发送失败，会自动去掉 @ 重发一次，保证文案一定送达。</li>
-    <li>插件用轮询而不是事件推送，是因为钉钉会把「你自己发的消息」从事件流里过滤掉，长连接收不到。</li>
-    <li>设置文件：C:\\Users\\13680\\.dsh\\presale\\settings.json（面板上所有改动都立即写盘并生效，无需重启）</li>
-  </ul>
-</section>
-"""
-
-# 一张普通卡片，作为对照（确认折叠样式没有污染常驻卡片）
-CARD_PLAIN = """
+# 与 client.js 的 Card 组件等价的普通卡片（卡片现在是常驻展开的，没有折叠态）。
+# 用「活动记录」当样本：它同时包含标题、说明、正文块，最能反映卡片排版。
+CARD_SAMPLE = """
 <section class="dsp-card">
   <h3 class="dsp-card-title">活动记录</h3>
   <p class="dsp-card-hint">每轮「发现 → 判定 → 发送/跳过」都记一条。试运行模式下这里是唯一的观察窗口。</p>
   <div class="dsp-row"><span class="dsp-note">暂无记录。若你刚在群里发过关键词，可点上面的「立即检查一次」。</span></div>
+</section>
+"""
+
+# 带表单字段的卡片：确认输入框高度、字段间距、提示文字排版
+CARD_FORM = """
+<section class="dsp-card">
+  <h3 class="dsp-card-title">动作二设置</h3>
+  <p class="dsp-card-hint">提示词可自定义：改这里就能调整总结的口径、结构与详略。</p>
+  <div class="dsp-row">
+    <div class="dsp-label">触发关键词</div>
+    <input class="dsp-input" value="梳理项目需求">
+  </div>
+  <div class="dsp-row">
+    <div class="dsp-label">读取消息条数</div>
+    <input class="dsp-input" value="200">
+  </div>
+  <div class="dsp-row">
+    <div class="dsp-label">总结提示词</div>
+    <textarea class="dsp-textarea">你是{company}的售前技术支持…</textarea>
+    <div class="dsp-card-hint" style="flex:1 1 100%;margin:2px 0 0 0">改这里就能调整总结的口径。</div>
+  </div>
 </section>
 """
 
@@ -116,16 +113,12 @@ body { margin: 0; padding: 24px; background: #f1f3f5; }
 </style></head>
 <body>
   <div class="pane">
-    <h2>① 收起（默认）</h2>
-    <div class="surface"><div class="dsp-root">{CARD_COLLAPSED}</div></div>
+    <h2>① 普通卡片（标题 + 说明 + 正文块）</h2>
+    <div class="surface"><div class="dsp-root">{CARD_SAMPLE}</div></div>
   </div>
   <div class="pane">
-    <h2>② 展开（点标题后）</h2>
-    <div class="surface"><div class="dsp-root">{CARD_EXPANDED}</div></div>
-  </div>
-  <div class="pane">
-    <h2>③ 对照：普通卡片不受影响</h2>
-    <div class="surface"><div class="dsp-root">{CARD_PLAIN}</div></div>
+    <h2>② 带表单字段的卡片（确认输入框高度与字段间距）</h2>
+    <div class="surface"><div class="dsp-root">{CARD_FORM}</div></div>
   </div>
 </body></html>
 """

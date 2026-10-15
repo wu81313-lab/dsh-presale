@@ -74,18 +74,6 @@ window.__ModuleLoader__.load({
 .dsp-root { display: flex; flex-direction: column; gap: 18px; padding: 4px 2px 24px; }
 .dsp-card { border: 1px solid var(--dsw-alias-border, rgba(128,128,128,.24)); border-radius: 12px; padding: 16px; background: var(--dsw-alias-bg-layer, transparent); }
 .dsp-card-title { font-size: 14px; font-weight: 600; margin: 0 0 4px; color: var(--dsw-alias-text-1, inherit); }
-/* ── 可折叠卡片 ──────────────────────────────────────────
-   折叠能力是**可选**的：只有传了 open / onToggle 的 Card 才会有这层头。
-   卡片本来是 padding:16px，这里用负外边距把标题行铺满，让整行都可点。 */
-.dsp-card-head { display: flex; align-items: center; gap: 8px; margin: -16px -16px 0; padding: 16px; }
-.dsp-card-head .dsp-card-title { margin: 0; flex: 1; min-width: 0; }
-.dsp-card-head-btn { cursor: pointer; user-select: none; border-radius: 12px 12px 0 0; }
-.dsp-card-head-btn:hover { background: var(--dsw-alias-bg-layer-2, rgba(128,128,128,.06)); }
-.dsp-card-head-btn:focus-visible { outline: 2px solid var(--dsw-alias-brand-primary, #0f1115); outline-offset: -2px; }
-/* 箭头：收起朝下、展开朝上（点开才知道里面是说明文字）。
-   字号别太小——11px 在深色主题下几乎看不见。 */
-.dsp-caret { flex: none; font-size: 13px; line-height: 1; color: var(--dsw-alias-label-secondary, rgba(128,128,128,.9)); transition: transform .16s; }
-.dsp-caret-open { transform: rotate(180deg); }
 .dsp-card-hint { font-size: 12px; line-height: 1.6; margin: 0 0 12px; color: var(--dsw-alias-text-3, rgba(128,128,128,.9)); }
 .dsp-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .dsp-row + .dsp-row { margin-top: 10px; }
@@ -149,38 +137,11 @@ window.__ModuleLoader__.load({
       );
     }
 
-    /**
-     * 卡片。
-     *
-     * 默认是常驻展开的普通卡片；只有传了 `open` / `onToggle` 才变可折叠。
-     * 折叠态下标题行整体可点，右侧一个箭头指示状态——
-     * 之所以做成可选而不是全局折叠：绝大多数卡片是拿来改设置的，
-     * 折起来反而多一次点击；只有「几点要知道的」这种读一次就够的说明
-     * 才值得默认收起。
-     */
     function Card(props) {
-      const collapsible = typeof props.open === 'boolean';
-      const open = collapsible ? props.open : true;
-      const headProps = { className: `dsp-card-head${collapsible ? ' dsp-card-head-btn' : ''}` };
-      if (collapsible) {
-        headProps.onClick = props.onToggle;
-        headProps.role = 'button';
-        headProps.tabIndex = 0;
-        headProps['aria-expanded'] = open;
-        headProps.onKeyDown = event => {
-          if (event.key === 'Enter' || event.key === ' ') {
-            event.preventDefault();
-            props.onToggle?.();
-          }
-        };
-      }
       return h('section', { className: 'dsp-card' },
-        h('div', headProps,
-          h('h3', { className: 'dsp-card-title' }, props.title),
-          collapsible ? h('span', { className: `dsp-caret${open ? ' dsp-caret-open' : ''}` }, '▾') : null,
-        ),
-        props.hint ? h('p', { className: 'dsp-card-hint', style: { marginTop: -8 } }, props.hint) : null,
-        open ? props.children : null,
+        h('h3', { className: 'dsp-card-title' }, props.title),
+        props.hint ? h('p', { className: 'dsp-card-hint' }, props.hint) : null,
+        props.children,
       );
     }
 
@@ -194,13 +155,6 @@ window.__ModuleLoader__.load({
       const [busy, setBusy] = React.useState('');
       const [saved, setSaved] = React.useState('');
       const [attachmentStats, setAttachmentStats] = React.useState(null);
-      /**
-       * 各卡片的折叠状态。
-       *
-       * 默认：全部收起（只有「几点要知道的」这张卡支持折叠）。
-       * 用对象而不是布尔，是为了以后想给别的卡加折叠时不用改结构。
-       */
-      const [open, setOpen] = React.useState({});
       const dirtyRef = React.useRef(false);
 
       const refresh = React.useCallback(async () => {
@@ -836,20 +790,6 @@ window.__ModuleLoader__.load({
           ? h('div', { className: `dsp-note ${error.length > 0 ? 'dsp-note-err' : ''}` },
               error.length > 0 ? `错误：${error}` : saved)
           : null,
-
-        // ── 说明（默认收起：读一次就够，展开会占掉大半屏）──────────
-        h(Card, {
-          title: '几点要知道的',
-          open: open.about === true,
-          onToggle: () => setOpen(prev => ({ ...prev, about: !prev.about })),
-        },
-          h('ul', { style: { margin: 0, paddingLeft: 20, fontSize: 13, lineHeight: 1.9 } },
-            h('li', null, '触发条件严格限定为「你自己发的消息」——同事在群里说同样的话不会有任何反应，这是设计如此。'),
-            h('li', null, '@ 必须在正文里用 <@openDingtalkId> 占位符，这是钉钉的硬要求，插件已自动处理；若 @ 发送失败，会自动去掉 @ 重发一次，保证文案一定送达。'),
-            h('li', null, '插件用轮询而不是事件推送，是因为钉钉会把「你自己发的消息」从事件流里过滤掉，长连接收不到。'),
-            h('li', null, `设置文件：${status.settingsPath ?? '（未知）'}（面板上所有改动都立即写盘并生效，无需重启）`),
-          ),
-        ),
       );
     }
 
