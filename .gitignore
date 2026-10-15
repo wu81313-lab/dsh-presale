@@ -24,3 +24,6 @@ Thumbs.db
 *.log
 npm-debug.log*
 *.tmp
+
+# preview-panel.py 的生成物，不入库
+tools/preview-panel.png
