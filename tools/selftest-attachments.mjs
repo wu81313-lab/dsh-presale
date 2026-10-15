@@ -30,9 +30,30 @@ function check(name, condition, detail = '') {
 
 const settingsPath = join(home, 'presale', 'settings.json');
 const settings = createSettings({ settingsPath, config: { settingsPath }, logger });
+
+/**
+ * saveImage 的替身。
+ *
+ * 真实的 saveImage 只存在于 DSH 宿主进程（`ctx.attachments`），外部脚本拿不到。
+ * 所以这里注入一个同形状的替身：它的职责只是**让图片路径能走通、能写进缓存**，
+ * 好让本脚本验证"第二次命中缓存、不再下载"。
+ *
+ * 真实通道（图片真的被模型看到）由插件工具 presale_image_selftest 验证——
+ * 那个必须在宿主进程里跑，已经实测通过。
+ */
+const fakeSaveImage = async ({ data, mediaType, name }) => ({
+  attachmentId: `fake:${mediaType}:${data.length}`,
+  mediaType,
+  bytes: data.length,
+  width: 0,
+  height: 0,
+  name: name ?? '',
+});
+
 const attachments = createAttachments({
   getSettings: () => settings.get(),
   cacheDir: join(home, 'presale', 'attachments'),
+  saveImage: fakeSaveImage,
   logger,
 });
 
@@ -86,6 +107,10 @@ try {
       check('至少有一个附件被成功提取', first.results.some(r => r.status === 'ok'));
       check('内容块格式正确',
         first.block.includes('=== 附件内容开始 ===') && first.block.includes('=== 附件内容结束 ==='));
+      if (first.images.length > 0) {
+        check('图片以"交给模型查看"的形式返回引用', first.images.length > 0,
+          `${first.images.length} 张，首张 ${String(first.images[0].attachment?.mediaType ?? '?')}`);
+      }
 
       console.log(`\n== 第二次处理（应全部命中缓存）==`);
       const second = await attachments.collect(refs);

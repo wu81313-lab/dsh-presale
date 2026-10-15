@@ -103,12 +103,14 @@ dws chat +search-msg --senders <我的ID> --start <RFC3339> --no-enrich --page-a
 
 | 类型 | 处理 |
 |---|---|
-| `.docx` | 解析 `word/document.xml`，按段落还原正文 |
+| `.docx` | 解析 `word/document.xml`，按段落还原正文（表格单元也纳入） |
 | `.xlsx` | 解析共享字符串与工作表，输出 `表名 \| 单元格` 行 |
-| `.txt` `.md` `.csv` `.json` `.xml` 等 | 直接读（UTF-8 优先，乱码则退回 GBK） |
+| `.pptx` | 逐页解析 `ppt/slides/slideN.xml`，带页码与演讲者备注；**按页码数字排序**（否则 1,10,11,2 会让模型看乱顺序） |
+| `.txt` `.md` `.csv` `.json` `.xml` `.yaml` 等 | 直接读（UTF-8 优先，乱码则退回 GBK） |
 | `.pdf` | 需要设置里的 Python 路径；找不到解析器就明确标注「未提取」 |
 | **图片** | 下载 → 注册为 DSH 附件 → **作为多模态内容块直接交给模型看** |
 | 语音 / 视频 | 登记并说明「当前模型只支持文本与图像输入」——不假装处理过 |
+| 旧版 Office（`.doc` / `.xls` / `.ppt`） | 二进制格式无法解析；**明确告知另存为新格式**再发 |
 | 其它格式 | 登记并说明未支持，**不会假装读过** |
 
 > **图片是"直接给模型看"，不是靠 OCR。** DeepSeek-V4.1-Flash 的模型目录声明了
@@ -118,6 +120,10 @@ dws chat +search-msg --senders <我的ID> --start <RFC3339> --no-enrich --page-a
 >
 > 只接受 png / jpeg / webp / gif；尺寸或体积超限时会明确标注原因。
 > 拿不到附件服务时降级为「只登记不交给模型」，**不会假装看过**。
+>
+> 判断图片**按文件头字节**而不是扩展名——钉钉对同一张图会给出两个 resourceId，
+> 其中一个没有 `contentType`、也没有文件名，落盘成 `.bin`，按扩展名判就会被
+> 误当成"不支持的格式"（实测踩到过，同一张图一条路读到了、另一条报不支持）。
 
 **落点**：`~/.dsh/presale/attachments/`（面板「附件缓存」里能看到完整路径与占用）。
 
@@ -126,8 +132,12 @@ attachments/
   <resourceId 的哈希前 12 位>/
       <原文件名>        原件
       meta.json        来源、大小、下载时间
-  extract/<同样哈希>.txt   提取出的纯文本
+  extract/<同样哈希>.v<N>.txt   提取出的纯文本
 ```
+
+> 提取结果的文件名带 `<N>` 版本号（`CACHE_VERSION`）。**改动提取行为时必须 +1**，
+> 否则旧的结论会被继续命中——功能明明改好了却依旧读不到，而且从外面完全看不出
+> 是缓存的锅（实测踩到过：图片支持上线后，旧的「图片不支持」结论仍在生效）。
 
 用哈希做目录名而不是原文件名，既避免同名文件互相覆盖，也避免文件名里的 `..` 造成路径穿越。
 
@@ -237,6 +247,7 @@ node tools/selftest-send-quoting.mjs     # @ 占位符与多行正文能否到�
 node tools/selftest-real-template.mjs    # 用你配置里的真实文案走一遍发送（dry-run）
 node tools/selftest-full-chain.mjs       # 完整链路：成员表 → 历史 → @ 编排 → 发送预检
 node tools/selftest-attachments.mjs      # 附件链路：真实下载 → 提取正文 → 缓存命中
+node tools/selftest-pptx-real.mjs        # 用 python-pptx 生成真实 PPT 验证解析器
 ```
 
 **需要真实钉钉数据的自检要先用环境变量提供夹具**（仓库里不含任何真实 ID）：
