@@ -166,33 +166,32 @@ if (styleTags.length === 1) {
   // `--dsw-alias-text-1` / `--dsw-alias-brand` 这类**猜测名**，而真实令牌是
   // `--dsw-alias-border-l1` / `--dsw-alias-label-primary` / `--dsw-alias-brand-primary`。
   // 写错**不会报错**，只会静默走兜底值——于是「跟随主题」形同虚设，
-  // 换深浅色面板也不跟着变。所以这里对照真实令牌表逐个校验。
+  // 换深浅色面板也不跟着变。
   //
-  // 令牌表来源：cordis_inspect_query(client / Theme / listTokens)
-  const THEME_TOKENS = new Set([
-    '--dsw-alias-bg-base',
-    '--dsw-alias-bg-layer-1',
-    '--dsw-alias-bg-layer-2',
-    '--dsw-alias-bg-overlay',
-    '--dsw-alias-border-l1',
-    '--dsw-alias-border-l2',
-    '--dsw-alias-brand-primary',
-    '--dsw-alias-label-primary',
-    '--dsw-alias-label-secondary',
-    '--dsw-alias-state-error-primary',
-    '--dsw-alias-state-idle-primary',
-    '--dsw-alias-state-success-primary',
-    '--dsw-alias-state-warn-primary',
-    '--dsw-specific-sidebar-fill',
-  ]);
+  // 清单**从主题包导出，不手写**：最初我按 listTokens 的 14 个建了白名单，
+  // 但那个列表只是子集（客户端自带设置页实际用到 79 个），
+  // 于是真令牌被误判成非法，自检变成了"阻碍正确改动"的东西。
+  // 导出命令：python tools/sync-theme-tokens.py
+  const tokenListPath = new URL('./theme-tokens.json', import.meta.url);
+  let THEME_TOKENS = new Set();
+  try {
+    const payload = JSON.parse(readFileSync(tokenListPath, 'utf8'));
+    THEME_TOKENS = new Set(payload.tokens ?? []);
+  } catch (err) {
+    console.log(`  ! 读不到 theme-tokens.json（${err.message}）——先跑 python tools/sync-theme-tokens.py`);
+  }
+
   // 只看 CSS 部分：注释里会举反例（提到错误的旧名字），不该被算进来
   const cssWithoutComments = css.replace(/\/\*[\s\S]*?\*\//gu, '').replace(/^\s*\/\/.*$/gmu, '');
   const usedTokens = [...new Set(cssWithoutComments.match(/--dsw-[a-z0-9-]+/gu) ?? [])];
-  const unknownTokens = usedTokens.filter(t => !THEME_TOKENS.has(t));
+  // --dsw-static-* 是底层色板，同样合法
+  const unknownTokens = usedTokens.filter(t => !THEME_TOKENS.has(t) && !t.startsWith('--dsw-static-'));
   check(
     '样式里的令牌名都是 DSH 真实令牌（防止静默失效）',
-    unknownTokens.length === 0,
-    unknownTokens.length > 0 ? `未知令牌：${unknownTokens.join('、')}` : `共 ${usedTokens.length} 个`,
+    unknownTokens.length === 0 && THEME_TOKENS.size > 0,
+    unknownTokens.length > 0
+      ? `未知令牌：${unknownTokens.join('、')}`
+      : `共 ${usedTokens.length} 个，对照 ${THEME_TOKENS.size} 个已知令牌`,
   );
 }
 
