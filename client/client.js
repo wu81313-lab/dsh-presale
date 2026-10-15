@@ -154,8 +154,6 @@ window.__ModuleLoader__.load({
       const [error, setError] = React.useState('');
       const [busy, setBusy] = React.useState('');
       const [saved, setSaved] = React.useState('');
-      const [testResult, setTestResult] = React.useState(null);
-      const [testConversation, setTestConversation] = React.useState('');
       const [attachmentStats, setAttachmentStats] = React.useState(null);
       const dirtyRef = React.useRef(false);
 
@@ -237,25 +235,6 @@ window.__ModuleLoader__.load({
           setError('');
         } catch (err) {
           setError(`读取附件缓存失败：${err.message}`);
-        }
-      }
-
-      async function runTest(kind) {
-        const conversationId = testConversation.trim();
-        if (conversationId.length === 0) {
-          setTestResult({ error: '请先填一个会话 ID（openConversationId，以 cid 开头）。可从上面的活动记录里复制。' });
-          return;
-        }
-        setBusy(`test-${kind}`);
-        setTestResult(null);
-        try {
-          const result = await api('/test', { method: 'POST', body: { kind, conversationId } });
-          setTestResult(result);
-          setError('');
-        } catch (err) {
-          setTestResult({ error: err.message });
-        } finally {
-          setBusy('');
         }
       }
 
@@ -652,50 +631,6 @@ window.__ModuleLoader__.load({
               disabled: busy === 'save',
               onClick: () => void save({ llm: settings.llm }),
             }, '保存模型设置'),
-          ),
-        ),
-
-        // ── 试跑 ──────────────────────────────────────────────
-        h(Card, {
-          title: '试跑（不会发送）',
-          hint: '用真实会话数据走完整链路，只把「报文与 @ 判定结果」显示出来，绝不发消息。先在活动记录里复制一个会话 ID 填进来。',
-        },
-          h(Field, { label: '会话 ID' },
-            h('input', {
-              className: 'dsp-input dsp-mono',
-              value: testConversation,
-              placeholder: 'cid…（从下方活动记录或群链接里取）',
-              onChange: e => setTestConversation(e.target.value),
-            }),
-          ),
-          h('div', { className: 'dsp-actions', style: { marginTop: 12 } },
-            h('button', { className: 'dsp-btn', disabled: busy !== '', onClick: () => void runTest('provide') }, busy === 'test-provide' ? '生成中…' : '试跑动作一'),
-            h('button', { className: 'dsp-btn', disabled: busy !== '', onClick: () => void runTest('summarize') }, busy === 'test-summarize' ? '分析中…' : '试跑动作二'),
-          ),
-          testResult === null ? null : h('div', { className: 'dsp-note', style: { marginTop: 12 } },
-            testResult.error
-              ? `失败：${testResult.error}`
-              : h('div', null,
-                  h('div', { style: { marginBottom: 8 } },
-                    h('strong', null, '@ 判定：'),
-                    testResult.mention?.mode === 'at'
-                      ? `会真 @ ${testResult.mention.name}（置信度 ${testResult.mention.confidence}）— ${testResult.mention.reason}`
-                      : testResult.mention?.mode === 'textual'
-                        ? `仅文本提及 ${testResult.mention.name}（置信度 ${testResult.mention.confidence}）— ${testResult.mention.reason}`
-                        : `不 @（${testResult.mention?.reason ?? '无原因'}）`,
-                  ),
-                  (testResult.mention?.evidence ?? []).length > 0
-                    ? h('div', { style: { marginBottom: 8 } }, h('strong', null, '依据：'),
-                        h('ul', { style: { margin: '4px 0 0 18px' } }, (testResult.mention.evidence).map((e, i) => h('li', { key: i }, e))))
-                    : null,
-                  (testResult.warnings ?? []).length > 0
-                    ? h('div', { style: { marginBottom: 8 } }, h('strong', null, '提醒：'),
-                        h('ul', { style: { margin: '4px 0 0 18px' } }, (testResult.warnings).map((w, i) => h('li', { key: i }, w))))
-                    : null,
-                  h('div', { style: { marginBottom: 4 } }, h('strong', null, '将发送的正文：')),
-                  h('pre', { className: 'dsp-pre' }, testResult.text || '（空）'),
-                  h('div', { className: 'dsp-card-hint', style: { marginTop: 8 } }, testResult.wouldSend ?? ''),
-                ),
           ),
         ),
 
