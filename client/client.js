@@ -589,17 +589,28 @@ window.__ModuleLoader__.load({
           ),
         ),
 
-        // ── 公司名 ────────────────────────────────────────────
+        // ── 公司名 / 使用者名 ──────────────────────────────────
         h(Card, {
-          title: '公司名',
-          hint: '提示词里的 {company} 会被替换成这个值，让模型以你的公司口吻说话。留空则显示为「我们公司」。',
+          title: '公司名与署名',
+          hint: '提示词里可以用 {company} 和 {owner} 两个占位符，发送前会被替换成下面的值。',
         },
-          h(Field, { label: '公司名' },
+          h(Field, { label: '公司名（提示词里的 {company}）', hint: '让模型以你的公司口吻说话。留空则显示为「我们公司」。' },
             h('input', {
               className: 'dsp-input',
               value: settings.company ?? '',
               placeholder: '例如：示例智能科技',
               onChange: e => edit('company', e.target.value),
+            }),
+          ),
+          h(Field, {
+            label: '使用者名（提示词里的 {owner}）',
+            hint: '默认提示词末尾的署名「本消息由{owner}AI售前助理发出」会用它替换。留空则把整行署名去掉——不发读不通的半句。',
+          },
+            h('input', {
+              className: 'dsp-input',
+              value: settings.ownerName ?? '',
+              placeholder: '例如：张三',
+              onChange: e => edit('ownerName', e.target.value),
             }),
           ),
         ),
