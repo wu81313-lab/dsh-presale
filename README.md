@@ -107,8 +107,17 @@ dws chat +search-msg --senders <我的ID> --start <RFC3339> --no-enrich --page-a
 | `.xlsx` | 解析共享字符串与工作表，输出 `表名 \| 单元格` 行 |
 | `.txt` `.md` `.csv` `.json` `.xml` 等 | 直接读（UTF-8 优先，乱码则退回 GBK） |
 | `.pdf` | 需要设置里的 Python 路径；找不到解析器就明确标注「未提取」 |
-| 图片 / 语音 / 视频 | **不下载**，只登记并说明「需要多模态或语音转写通道」 |
+| **图片** | 下载 → 注册为 DSH 附件 → **作为多模态内容块直接交给模型看** |
+| 语音 / 视频 | 登记并说明「当前模型只支持文本与图像输入」——不假装处理过 |
 | 其它格式 | 登记并说明未支持，**不会假装读过** |
+
+> **图片是"直接给模型看"，不是靠 OCR。** DeepSeek-V4.1-Flash 的模型目录声明了
+> `inputModalities: ["text", "image"]`，DSH 的 attachments 服务负责把字节校验、
+> 归一化并注册成 `{type:'image', attachment}` 内容块。所以群里的图纸、界面截图、
+> 表格照片都能被读懂，图里的文字也会被读出来。
+>
+> 只接受 png / jpeg / webp / gif；尺寸或体积超限时会明确标注原因。
+> 拿不到附件服务时降级为「只登记不交给模型」，**不会假装看过**。
 
 **落点**：`~/.dsh/presale/attachments/`（面板「附件缓存」里能看到完整路径与占用）。
 
@@ -247,6 +256,16 @@ setx DSH_PRESALE_TEST_NAME   "张三"         # 上面那个成员的显示名
 node tools/selftest-attachments.mjs          # 附件链路：下载 → 提取 → 缓存命中（加 --clear 清缓存）
 node tools/diagnose-attachment-cache.mjs     # 附件缓存落盘情况与上限对照
 node tools/diagnose-image-cache.mjs          # 图片类附件是否会重复下载
+```
+
+**图片通道要在 DSH 会话里用工具验证**（外部脚本没有 `ctx`，验不了）：
+
+```
+presale_image_selftest conversationId="cid…"
+```
+
+它会下载一张真实群图片、注册成 DSH 附件、再让模型描述它——用来确认
+「模型能识别图片」这条路是通的。
 node tools/diagnose-oid.mjs        # openDingtalkId 在群成员表与消息里是否一致
 node tools/diagnose-oid2.mjs       # 两个 ID 的作用域差异
 node tools/diagnose-senders.mjs    # --senders 多值时是否仍在过滤

@@ -816,11 +816,20 @@ window.__ModuleLoader__.load({
                   Array.isArray(e.attachments) && e.attachments.length > 0
                     ? h('div', { style: { marginTop: 4 } },
                         h('div', { className: 'dsp-card-hint', style: { margin: 0 } }, `附件（${e.attachmentSummary || ''}）：`),
-                        ...e.attachments.map((a, ai) => h('div', {
-                          key: ai,
-                          className: 'dsp-card-hint',
-                          style: { margin: '2px 0 0 12px' },
-                        }, `${a.status === 'ok' ? '✔' : a.status === 'error' ? '✖' : 'ℹ'} ${a.name}｜${(a.size / 1024).toFixed(1)}KB｜提取 ${a.chars} 字${a.fromCache ? '｜缓存命中' : ''}${a.note ? `｜${a.note}` : ''}`)),
+                        ...e.attachments.map((a, ai) => {
+                          // 三种结果要看得出来：读到正文 / 图片交给模型看 / 没读到
+                          const icon = a.status === 'ok' ? '✔' : a.status === 'image' ? '🖼' : a.status === 'error' ? '✖' : 'ℹ';
+                          const what = a.status === 'ok'
+                            ? `提取 ${a.chars} 字`
+                            : a.status === 'image'
+                              ? '图片已交给模型查看'
+                              : '未提取内容';
+                          return h('div', {
+                            key: ai,
+                            className: 'dsp-card-hint',
+                            style: { margin: '2px 0 0 12px' },
+                          }, `${icon} ${a.name}｜${(a.size / 1024).toFixed(1)}KB｜${what}${a.fromCache ? '｜缓存命中' : ''}${a.note ? `｜${a.note}` : ''}`);
+                        }),
                       )
                     : null,
                   e.error ? h('div', { style: { marginTop: 2, color: 'var(--dsw-alias-danger, #d64545)' } }, `错误：${e.error}`) : null,

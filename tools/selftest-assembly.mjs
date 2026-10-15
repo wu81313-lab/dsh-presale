@@ -85,9 +85,12 @@ try {
   });
 
   console.log('\n== 装配结果断言 ==');
-  check('注册了 4 个工具', registered.tools.length === 4, `实际 ${registered.tools.length}`);
+  check('注册了 5 个工具', registered.tools.length === 5, `实际 ${registered.tools.length}`);
   const names = registered.tools.map(t => t.name).sort();
-  const expectedNames = ['presale_llm_selftest', 'presale_recent_mine', 'presale_send_text', 'presale_status'];
+  const expectedNames = [
+    'presale_image_selftest', 'presale_llm_selftest', 'presale_recent_mine',
+    'presale_send_text', 'presale_status',
+  ];
   check('工具名符合预期', JSON.stringify(names) === JSON.stringify(expectedNames), JSON.stringify(names));
 
   for (const tool of registered.tools) {
