@@ -68,7 +68,7 @@ try {
   check('正文与直接解析一致', dispatched.text === text);
 
   console.log('\n== 只给文件名（真实场景里钉钉会给中文名）==');
-  const renamed = extractText(bytes, '普瑞玛技术方案V2.pptx');
+  const renamed = extractText(bytes, '示例技术方案V2.pptx');
   check('中文名不影响解析', renamed.status === 'ok');
 } catch (error) {
   failures += 1;
