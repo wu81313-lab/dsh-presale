@@ -73,9 +73,8 @@ SWITCH_CARD = """
     <label class="dsp-check"><input type="checkbox" checked> 开启</label>
   </div>
   <div class="dsp-row">
-    <div class="dsp-label">试运行 dryRun</div>
+    <div class="dsp-label"><span class="dsp-tiptrigger" title="开启时一切照常执行（读消息、判销售、组装文案），但只在活动日志里记录「本该发什么」，不会真的发到群里。">试运行 dryRun</span></div>
     <label class="dsp-check"><input type="checkbox"> 真实发送到群</label>
-    <div class="dsp-card-hint" style="flex:1 1 100%;margin:2px 0 0 0">开启时一切照常执行（读消息、判销售、组装文案），但只在活动日志里记录「本该发什么」，不会真的发到群里。</div>
   </div>
   <div class="dsp-actions" style="margin-top:14px">
     <button class="dsp-btn dsp-btn-primary">保存开关</button>

@@ -157,12 +157,10 @@ window.__ModuleLoader__.load({
    触发区是**内容本身**（卡片标题、字段标签），没有额外的 ? 圆点。
    用虚线内下划线暗示"这里有说明可看"——比一个问号图标含蓄，
    也不会被误认成可点击的按钮。 */
+/* 悬停提示的触发区（卡片标题、字段标签）。
+   不加下划线也不加图标：文字本身就是触发区，鼠标移上去即可。
+   cursor:help 是唯一的暗示——不改变排版，也不会被误认成可点的按钮。 */
 .dsp-tiptrigger { cursor: help; }
-/* 虚线下划线暗示"这里有说明可看"——比一个问号图标含蓄，也不像可点的按钮。
-   下划线直接加在包裹层上；气泡是它的子元素，单独把装饰清掉。 */
-.dsp-tiptrigger { text-decoration: underline dotted;
-  text-decoration-color: var(--dsw-alias-label-tertiary, rgba(128,128,128,.6));
-  text-underline-offset: 3px; }
 .dsp-tiptrigger > .dsp-tip { text-decoration: none; }
 .dsp-tip { position: fixed; z-index: 9999; width: 300px; max-width: calc(100vw - 24px);
   padding: 9px 11px; border-radius: 8px; font-size: 12px; line-height: 1.65;
@@ -261,11 +259,17 @@ window.__ModuleLoader__.load({
       );
     }
 
+    /**
+     * 表单字段：左标签 + 右控件。
+     *
+     * `hint` 默认挂在**标签**上做成悬停提示（与卡片标题一致），
+     * 不再在字段下方摊一行说明——几十个字段各摊一行，页面会被撑得很长。
+     * 需要常驻显示时传 hintMode="inline"。
+     *
+     * 注意：这里用的是 Field 默认的 `hint` 属性，不是 Card 的。
+     */
     function Field(props) {
-      // 默认**就地显示**说明：字段提示大多是"怎么填"的操作指引，
-      // 边看边填更顺手，收进气泡反而要多一步。
-      // 需要省地方时显式传 hintMode="tip"。
-      const asTip = props.hintMode === 'tip';
+      const asTip = props.hintMode !== 'inline';
       return h('div', { className: 'dsp-row' },
         h('div', { className: 'dsp-label' },
           asTip && props.hint ? h(Tooltip, { text: props.hint }, props.label) : props.label,
@@ -436,6 +440,10 @@ window.__ModuleLoader__.load({
       const id = status.identity ?? {};
       const llmInfo = status.llm ?? {};
       const t = settings.triggers ?? { provide: {}, summarize: {} };
+      // 监听是否在跑。
+      // 读自 poller 的**实际运行状态**，不是 settings.enabled 那个草稿——
+      // 否则用户改了勾选框还没保存时，开关会显示成与实际不符的状态。
+      const listening = poller.running === true;
 
       // 状态灯：把「为什么没工作」一次说清
       const badges = [];
