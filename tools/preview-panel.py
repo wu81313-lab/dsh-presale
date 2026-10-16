@@ -62,11 +62,12 @@ STATUS_EXPANDED = """
 
 # 「总开关」卡片（与 client.js 渲染结构一致）。
 # 关键点：
-#   · 卡片说明收成标题右侧的 ? 提示点，不再占一整行；
+#   · 卡片说明挂在**标题**上（悬停标题出气泡），没有额外的 ? 圆点；
+#   · 监听启停是一个状态开关（开=绿 / 关=红），不是两个按钮；
 #   · 三个维护动作折在 details 里。
 SWITCH_CARD = """
 <section class="dsp-card">
-  <h3 class="dsp-card-title">总开关<button type="button" class="dsp-hint" title="建议先用「试运行」把文案和 @ 判定调准，确认无误后再关掉试运行让它真发消息。">?</button></h3>
+  <h3 class="dsp-card-title"><span class="dsp-tiptrigger" title="建议先用「试运行」把文案和 @ 判定调准，确认无误后再关掉试运行让它真发消息。">总开关</span></h3>
   <div class="dsp-row">
     <div class="dsp-label">启用监听</div>
     <label class="dsp-check"><input type="checkbox" checked> 开启</label>
@@ -78,8 +79,14 @@ SWITCH_CARD = """
   </div>
   <div class="dsp-actions" style="margin-top:14px">
     <button class="dsp-btn dsp-btn-primary">保存开关</button>
-    <button class="dsp-btn">开始监听</button>
-    <button class="dsp-btn">停止监听</button>
+    <label class="dsp-switch on" title="点击停止监听">
+      <input type="checkbox" checked>
+      <span class="dsp-switch-track">
+        <span class="dsp-switch-text">On</span>
+        <span class="dsp-switch-thumb"></span>
+      </span>
+      <span class="dsp-switch-caption">监听中</span>
+    </label>
     <div class="dsp-spacer"></div>
   </div>
   <details class="dsp-maintain">
@@ -93,13 +100,23 @@ SWITCH_CARD = """
 </section>
 """
 
-# 悬停时的样子：气泡用 position:fixed（预览里直接给坐标，模拟 JS 量出来的位置）
+# 「已停止」状态：开关变红（state-error-primary），一眼看出功能没在工作
+SWITCH_CARD_OFF = SWITCH_CARD.replace(
+    '<label class="dsp-switch on" title="点击停止监听">\n      <input type="checkbox" checked>',
+    '<label class="dsp-switch" title="点击开始监听">\n      <input type="checkbox">',
+).replace('<span class="dsp-switch-text">On</span>', '<span class="dsp-switch-text">Off</span>'
+).replace('<span class="dsp-switch-caption">监听中</span>', '<span class="dsp-switch-caption">已停止</span>')
+
+# 悬停标题时的样子。
+# 气泡是 position:fixed，且**水平居中于触发区**——触发区是整行标题（卡片宽度），
+# 所以气泡落在卡片中间，而不是紧贴「总开关」四个字。按同一算法给坐标，
+# 保证预览与真实渲染一致。
 SWITCH_CARD_HOVER = SWITCH_CARD.replace(
-    '<button type="button" class="dsp-hint"',
-    '<button type="button" aria-expanded="true" class="dsp-hint"',
+    '<span class="dsp-tiptrigger"',
+    '<span class="dsp-tiptrigger" data-open="1"',
 ).replace(
     '</section>',
-    '<div class="dsp-tip" role="tooltip" style="left:200px;top:132px">'
+    '<div class="dsp-tip" role="tooltip" style="left:382px;top:148px">'
     '建议先用「试运行」把文案和 @ 判定调准，确认无误后再关掉试运行让它真发消息。</div></section>',
     1,
 )
@@ -170,12 +187,12 @@ body { margin: 0; padding: 24px; background: #f1f3f5; }
 </style></head>
 <body>
   <div class="pane">
-    <h2>① 总开关（说明收成标题旁的 ? 提示点）</h2>
+    <h2>① 总开关（监听中：开关为绿）</h2>
     <div class="surface"><div class="dsp-root">{SWITCH_CARD}</div></div>
   </div>
   <div class="pane">
-    <h2>② 总开关 · 悬停 ? 时的气泡</h2>
-    <div class="surface"><div class="dsp-root">{SWITCH_CARD_HOVER}</div></div>
+    <h2>② 总开关（已停止：开关为红）</h2>
+    <div class="surface"><div class="dsp-root">{SWITCH_CARD_OFF}</div></div>
   </div>
   <div class="pane">
     <h2>③ 运行状态 · 收起（默认）</h2>
@@ -199,7 +216,7 @@ body { margin: 0; padding: 24px; background: #f1f3f5; }
 </style></head>
 <body>
   <div class="pane">
-    <h2>总开关 · 悬停标题旁的 ？</h2>
+    <h2>总开关 · 悬停标题时的气泡（无 ? 圆点，触发区就是标题整行）</h2>
     <div class="surface"><div class="dsp-root">{SWITCH_CARD_HOVER}</div></div>
   </div>
 </body></html>

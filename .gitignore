@@ -28,3 +28,4 @@ npm-debug.log*
 # preview-panel.py 的生成物，不入库
 tools/preview-panel.png
 tools/preview-tip.png
+tools/preview-cards.png

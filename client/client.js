@@ -108,6 +108,34 @@ window.__ModuleLoader__.load({
 .dsp-mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12px; word-break: break-all; }
 .dsp-actions { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
 .dsp-spacer { flex: 1; }
+
+/* ── 状态开关（监听启停用）──────────────────────────────────
+   把「开始监听 / 停止监听」两个按钮合成一个开关：
+     · 两个按钮同时摆着，用户得先读文字才知道当前是开还是关；
+     · 开关的**位置**本身就表达状态（左关右开），一眼可读。
+   配色刻意区分：
+     · 开 = 绿（state-success-primary）
+     · 关 = **红**（state-error-primary）——不是灰。
+       监听停着等于功能没在工作，用中性的灰容易被当成"没设置"。
+   滑块上的 On/Off 与右侧文字都由 React 渲染（不用 ::after 生成内容，
+   否则那份文字读屏软件拿不到）。 */
+.dsp-switch { display: inline-flex; align-items: center; gap: 9px; flex: none; cursor: pointer; user-select: none; }
+.dsp-switch input { position: absolute; opacity: 0; width: 0; height: 0; }
+.dsp-switch-track { position: relative; flex: none; width: 44px; height: 24px; border-radius: 999px;
+  background: var(--dsw-alias-state-error-primary, #d64545); transition: background .18s; }
+.dsp-switch.on .dsp-switch-track { background: var(--dsw-alias-state-success-primary, #2f9e44); }
+.dsp-switch-thumb { position: absolute; top: 2px; left: 2px; width: 20px; height: 20px; border-radius: 50%;
+  background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,.3); transition: transform .18s; }
+.dsp-switch.on .dsp-switch-thumb { transform: translateX(20px); }
+/* On/Off 文字压在滑块上：关时靠右、开时靠左，是这类开关的惯例 */
+.dsp-switch-text { position: absolute; top: 50%; transform: translateY(-50%);
+  font-size: 10px; font-weight: 700; letter-spacing: .02em; color: #fff; }
+.dsp-switch:not(.on) .dsp-switch-text { right: 7px; }
+.dsp-switch.on .dsp-switch-text { left: 7px; }
+.dsp-switch-caption { font-size: 13px; color: var(--dsw-alias-text-2, inherit); white-space: nowrap; }
+.dsp-switch.busy { opacity: .6; cursor: default; }
+.dsp-switch:not(.busy):hover .dsp-switch-caption { color: var(--dsw-alias-text-1, inherit); }
+.dsp-switch input:focus-visible + .dsp-switch-track { outline: 2px solid var(--dsw-alias-brand, #4b7bec); outline-offset: 2px; }
 .dsp-pre { white-space: pre-wrap; word-break: break-word; font-family: inherit; font-size: 13px; line-height: 1.7; margin: 0; }
 /* 维护折叠区：默认收起，只占一行。
    三个维护动作（立即检查 / 重置水位 / 重新识别身份）都是排查用的，
@@ -124,17 +152,21 @@ window.__ModuleLoader__.load({
    为什么要自己写、且必须用 position:fixed：
      · 客户端没有暴露 primitives 服务，拿不到宿主自带的 Tooltip；
      · 卡片是 overflow:hidden，纯 CSS 的 ::after 气泡会被裁掉。
-   所以用 JS 量出触发点的位置，把气泡挂到 fixed 层上，再按视口夹紧。 */
-.dsp-hint { display: inline-flex; align-items: center; justify-content: center;
-  width: 16px; height: 16px; flex: none; padding: 0; margin-left: 6px;
-  border: 0; border-radius: 50%; background: 0 0; cursor: help;
-  font: inherit; font-size: 11px; line-height: 1; vertical-align: 1px;
-  color: var(--dsw-alias-text-3, rgba(128,128,128,.9));
-  box-shadow: inset 0 0 0 1px currentColor; }
-.dsp-hint:hover, .dsp-hint[aria-expanded="true"] { color: var(--dsw-alias-text-1, inherit); }
-.dsp-hint:focus-visible { outline: 2px solid var(--dsw-alias-brand, #4b7bec); outline-offset: 1px; }
+   所以用 JS 量出触发区的位置，把气泡挂到 fixed 层上，再按视口夹紧。
+
+   触发区是**内容本身**（卡片标题、字段标签），没有额外的 ? 圆点。
+   用虚线内下划线暗示"这里有说明可看"——比一个问号图标含蓄，
+   也不会被误认成可点击的按钮。 */
+.dsp-tiptrigger { cursor: help; }
+/* 虚线下划线暗示"这里有说明可看"——比一个问号图标含蓄，也不像可点的按钮。
+   下划线直接加在包裹层上；气泡是它的子元素，单独把装饰清掉。 */
+.dsp-tiptrigger { text-decoration: underline dotted;
+  text-decoration-color: var(--dsw-alias-label-tertiary, rgba(128,128,128,.6));
+  text-underline-offset: 3px; }
+.dsp-tiptrigger > .dsp-tip { text-decoration: none; }
 .dsp-tip { position: fixed; z-index: 9999; width: 300px; max-width: calc(100vw - 24px);
   padding: 9px 11px; border-radius: 8px; font-size: 12px; line-height: 1.65;
+  text-decoration: none; text-align: left; font-weight: 400;
   background: var(--dsw-alias-bg-layer, #fff);
   color: var(--dsw-alias-text-1, #0f1115);
   border: 1px solid var(--dsw-alias-border, rgba(128,128,128,.3));
@@ -161,6 +193,9 @@ window.__ModuleLoader__.load({
     /**
      * 悬停/聚焦提示气泡。
      *
+     * 触发区就是**被包裹的内容本身**（卡片标题、字段标签），不再另加 ? 圆点：
+     * 多一个圆点等于多一个要认的元素，而"悬停标题看说明"是通用习惯。
+     *
      * 为什么自己写而不是用组件库：客户端把 primitives 服务收在内部，
      * 第三方插件通过 ctx 拿不到（可用服务只有 layout / locale / sessions /
      * slots / theme / timer / uiWorkspace / workspaces）。
@@ -170,25 +205,36 @@ window.__ModuleLoader__.load({
      *   · fixed 相对视口定位，不受任何祖先的溢出影响。
      * 代价是要在打开时量一次触发点的位置，并做视口夹紧。
      *
-     * 交互：移入/聚焦显示，移出/失焦/Esc 关闭。未打开时不渲染 DOM。
+     * 交互：移入/聚焦显示（延迟 260ms，避免鼠标划过就弹），
+     * 移出/失焦/Esc 关闭；由于标题不可聚焦，额外支持点击切换。
      */
     function Tooltip(props) {
       const [pos, setPos] = React.useState(null);
       const ref = React.useRef(null);
+      const timer = React.useRef(null);
 
       const show = () => {
         const node = ref.current;
         if (node === null) return;
         const r = node.getBoundingClientRect();
         const W = 300;
-        // 水平居中于触发点，再夹进视口（左右各留 12px）
+        // 水平居中于触发区，再夹进视口（左右各留 12px）
         const center = r.left + r.width / 2;
         const left = Math.max(12 + W / 2, Math.min(center, window.innerWidth - 12 - W / 2));
         // 下方放不下就翻到上方
-        const above = r.bottom + 8 + 120 > window.innerHeight && r.top > 140;
+        const above = r.bottom + 8 + 130 > window.innerHeight && r.top > 150;
         setPos({ left, top: above ? r.top - 8 : r.bottom + 8, above });
       };
-      const hide = () => setPos(null);
+      const cancel = () => {
+        if (timer.current !== null) { clearTimeout(timer.current); timer.current = null; }
+      };
+      const schedule = () => { cancel(); timer.current = setTimeout(show, 260); };
+      const hide = () => { cancel(); setPos(null); };
+
+      // 卸载时清掉待触发的定时器，避免在已移除的节点上定位
+      React.useEffect(() => () => {
+        if (timer.current !== null) clearTimeout(timer.current);
+      }, []);
 
       React.useEffect(() => {
         if (pos === null) return undefined;
@@ -197,20 +243,16 @@ window.__ModuleLoader__.load({
         return () => window.removeEventListener('keydown', onKey);
       }, [pos]);
 
-      return h('span', { ref, style: { display: 'inline-flex' } },
-        h('button', {
-          type: 'button',
-          className: 'dsp-hint',
-          // title 与 aria-label 都带上原文：读屏和"浏览器原生悬停"都能拿到
-          title: props.text,
-          'aria-label': props.text,
-          'aria-expanded': pos !== null,
-          onMouseEnter: show,
-          onMouseLeave: hide,
-          onFocus: show,
-          onBlur: hide,
-          onClick: event => { event.preventDefault(); (pos === null ? show : hide)(); },
-        }, '?'),
+      return h('span', {
+        ref,
+        className: 'dsp-tiptrigger',
+        // 读屏与"浏览器原生悬停"都能拿到原文
+        title: props.text,
+        onMouseEnter: schedule,
+        onMouseLeave: hide,
+        onClick: event => { event.preventDefault(); cancel(); (pos === null ? show() : setPos(null)); },
+      },
+        props.children,
         pos === null ? null : h('div', {
           className: `dsp-tip${pos.above ? ' dsp-tip-above' : ''}`,
           role: 'tooltip',
@@ -226,8 +268,7 @@ window.__ModuleLoader__.load({
       const asTip = props.hintMode === 'tip';
       return h('div', { className: 'dsp-row' },
         h('div', { className: 'dsp-label' },
-          props.label,
-          props.hint && asTip ? h(Tooltip, { text: props.hint }) : null,
+          asTip && props.hint ? h(Tooltip, { text: props.hint }, props.label) : props.label,
         ),
         props.children,
         props.hint && !asTip
@@ -273,8 +314,8 @@ window.__ModuleLoader__.load({
       const asTip = props.hintMode !== 'inline';
       return h('section', { className: 'dsp-card' },
         h('h3', { className: 'dsp-card-title' },
-          props.title,
-          props.hint && asTip ? h(Tooltip, { text: props.hint }) : null,
+          // Tooltip 自带包裹 span，标题文字直接作为子节点，不再多套一层
+          asTip && props.hint ? h(Tooltip, { text: props.hint }, props.title) : props.title,
         ),
         props.hint && !asTip ? h('p', { className: 'dsp-card-hint' }, props.hint) : null,
         props.children,
@@ -472,12 +513,37 @@ window.__ModuleLoader__.load({
           ),
           h('div', { className: 'dsp-actions', style: { marginTop: 14 } },
             h('button', { className: 'dsp-btn dsp-btn-primary', disabled: busy === 'save', onClick: () => void save({ enabled: settings.enabled, dryRun: settings.dryRun }) }, '保存开关'),
-            h('button', {
-              className: 'dsp-btn',
-              disabled: busy !== '',
-              onClick: () => void act('start', '/start'),
-            }, '开始监听'),
-            h('button', { className: 'dsp-btn', disabled: busy !== '', onClick: () => void act('stop', '/stop') }, '停止监听'),
+            // 监听启停：一个状态开关，而不是「开始 / 停止」两个按钮。
+            //
+            // 原来两个按钮并排摆着，用户得先读文字才知道当前是开还是关，
+            // 而且"停止监听"在已经停止时仍然可点，容易误以为出问题。
+            // 开关的**位置**本身就表达状态（左关右开），一眼可读。
+            //
+            // 状态读自 poller（实际运行状态），不是读 settings 草稿——
+            // 否则改了勾选框还没保存时，开关会显示成另一个状态，跟实际不符。
+            h('label', {
+              className: `dsp-switch${listening ? ' on' : ''}${busy !== '' ? ' busy' : ''}`,
+              title: listening ? '点击停止监听' : '点击开始监听',
+            },
+              h('input', {
+                type: 'checkbox',
+                checked: listening,
+                disabled: busy !== '',
+                onChange: () => void act(listening ? 'stop' : 'start', listening ? '/stop' : '/start'),
+              }),
+              h('span', { className: 'dsp-switch-track' },
+                // On/Off 由 React 渲染在滑块上（不用 ::after 生成内容，
+                // 否则读屏软件拿不到这两个字）。忙碌时用省略号代替，
+                // 避免"点了没反应"的错觉。
+                h('span', { className: 'dsp-switch-text' },
+                  busy === 'start' || busy === 'stop' ? '…' : (listening ? 'On' : 'Off')),
+                h('span', { className: 'dsp-switch-thumb' }),
+              ),
+              h('span', { className: 'dsp-switch-caption' },
+                busy === 'start' ? '启动中…'
+                  : busy === 'stop' ? '停止中…'
+                  : (listening ? '监听中' : '已停止')),
+            ),
             h('div', { className: 'dsp-spacer' }),
           ),
           // 维护动作收进折叠区。
@@ -565,13 +631,13 @@ window.__ModuleLoader__.load({
         ),
 
         // ── 动作二 ────────────────────────────────────────────
+        //
+        // 原来这里是两张卡：「动作二 · 梳理项目需求」只有标题和说明（**空壳**），
+        // 真正的字段全在下面那张「动作二设置」里。同一件事拆成两张卡，
+        // 既显得重复，也让人以为"上面那张还没加载完"。合成一张。
         h(Card, {
           title: '动作二 · 梳理项目需求',
-          hint: '插件会读取该群近期消息，交给 DSH 的模型分析，然后把需求总结发回该群（默认不 @ 任何人）。',
-        }),
-        h(Card, {
-          title: '动作二设置',
-          hint: '提示词可自定义：改这里就能调整总结的口径、结构与详略。',
+          hint: '插件会读取该群近期消息，交给 DSH 的模型分析，然后把需求总结发回该群（默认不 @ 任何人）。下方提示词可自定义：改这里就能调整总结的口径、结构与详略。',
         },
           h(Field, { label: '触发关键词', hint: '多个用英文逗号分隔。' },
             h('input', {
