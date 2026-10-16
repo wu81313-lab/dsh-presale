@@ -119,6 +119,27 @@ window.__ModuleLoader__.load({
 .dsp-maintain > summary::-webkit-details-marker { display: none; }
 .dsp-maintain > summary::before { content: '▸'; font-size: 10px; }
 .dsp-maintain[open] > summary::before { content: '▾'; }
+
+/* ── 悬停提示 ──────────────────────────────────────────────
+   为什么要自己写、且必须用 position:fixed：
+     · 客户端没有暴露 primitives 服务，拿不到宿主自带的 Tooltip；
+     · 卡片是 overflow:hidden，纯 CSS 的 ::after 气泡会被裁掉。
+   所以用 JS 量出触发点的位置，把气泡挂到 fixed 层上，再按视口夹紧。 */
+.dsp-hint { display: inline-flex; align-items: center; justify-content: center;
+  width: 16px; height: 16px; flex: none; padding: 0; margin-left: 6px;
+  border: 0; border-radius: 50%; background: 0 0; cursor: help;
+  font: inherit; font-size: 11px; line-height: 1; vertical-align: 1px;
+  color: var(--dsw-alias-text-3, rgba(128,128,128,.9));
+  box-shadow: inset 0 0 0 1px currentColor; }
+.dsp-hint:hover, .dsp-hint[aria-expanded="true"] { color: var(--dsw-alias-text-1, inherit); }
+.dsp-hint:focus-visible { outline: 2px solid var(--dsw-alias-brand, #4b7bec); outline-offset: 1px; }
+.dsp-tip { position: fixed; z-index: 9999; width: 300px; max-width: calc(100vw - 24px);
+  padding: 9px 11px; border-radius: 8px; font-size: 12px; line-height: 1.65;
+  background: var(--dsw-alias-bg-layer, #fff);
+  color: var(--dsw-alias-text-1, #0f1115);
+  border: 1px solid var(--dsw-alias-border, rgba(128,128,128,.3));
+  box-shadow: 0 6px 24px rgba(0,0,0,.14); pointer-events: none; }
+.dsp-tip-above { transform: translateY(-100%); }
 `;
 
     let styleElement = null;
@@ -137,11 +158,81 @@ window.__ModuleLoader__.load({
 
     // ─────────────────────────── 小组件 ───────────────────────────
 
+    /**
+     * 悬停/聚焦提示气泡。
+     *
+     * 为什么自己写而不是用组件库：客户端把 primitives 服务收在内部，
+     * 第三方插件通过 ctx 拿不到（可用服务只有 layout / locale / sessions /
+     * slots / theme / timer / uiWorkspace / workspaces）。
+     *
+     * 为什么用 position:fixed 而不是 CSS 的 ::after：
+     *   · 卡片是 overflow:hidden，气泡会被裁掉；
+     *   · fixed 相对视口定位，不受任何祖先的溢出影响。
+     * 代价是要在打开时量一次触发点的位置，并做视口夹紧。
+     *
+     * 交互：移入/聚焦显示，移出/失焦/Esc 关闭。未打开时不渲染 DOM。
+     */
+    function Tooltip(props) {
+      const [pos, setPos] = React.useState(null);
+      const ref = React.useRef(null);
+
+      const show = () => {
+        const node = ref.current;
+        if (node === null) return;
+        const r = node.getBoundingClientRect();
+        const W = 300;
+        // 水平居中于触发点，再夹进视口（左右各留 12px）
+        const center = r.left + r.width / 2;
+        const left = Math.max(12 + W / 2, Math.min(center, window.innerWidth - 12 - W / 2));
+        // 下方放不下就翻到上方
+        const above = r.bottom + 8 + 120 > window.innerHeight && r.top > 140;
+        setPos({ left, top: above ? r.top - 8 : r.bottom + 8, above });
+      };
+      const hide = () => setPos(null);
+
+      React.useEffect(() => {
+        if (pos === null) return undefined;
+        const onKey = event => { if (event.key === 'Escape') setPos(null); };
+        window.addEventListener('keydown', onKey);
+        return () => window.removeEventListener('keydown', onKey);
+      }, [pos]);
+
+      return h('span', { ref, style: { display: 'inline-flex' } },
+        h('button', {
+          type: 'button',
+          className: 'dsp-hint',
+          // title 与 aria-label 都带上原文：读屏和"浏览器原生悬停"都能拿到
+          title: props.text,
+          'aria-label': props.text,
+          'aria-expanded': pos !== null,
+          onMouseEnter: show,
+          onMouseLeave: hide,
+          onFocus: show,
+          onBlur: hide,
+          onClick: event => { event.preventDefault(); (pos === null ? show : hide)(); },
+        }, '?'),
+        pos === null ? null : h('div', {
+          className: `dsp-tip${pos.above ? ' dsp-tip-above' : ''}`,
+          role: 'tooltip',
+          style: { left: pos.left, top: pos.top },
+        }, props.text),
+      );
+    }
+
     function Field(props) {
+      // 默认**就地显示**说明：字段提示大多是"怎么填"的操作指引，
+      // 边看边填更顺手，收进气泡反而要多一步。
+      // 需要省地方时显式传 hintMode="tip"。
+      const asTip = props.hintMode === 'tip';
       return h('div', { className: 'dsp-row' },
-        h('div', { className: 'dsp-label' }, props.label),
+        h('div', { className: 'dsp-label' },
+          props.label,
+          props.hint && asTip ? h(Tooltip, { text: props.hint }) : null,
+        ),
         props.children,
-        props.hint ? h('div', { className: 'dsp-card-hint', style: { flex: '1 1 100%', margin: '2px 0 0 0' } }, props.hint) : null,
+        props.hint && !asTip
+          ? h('div', { className: 'dsp-card-hint', style: { flex: '1 1 100%', margin: '2px 0 0 0' } }, props.hint)
+          : null,
       );
     }
 
@@ -170,10 +261,22 @@ window.__ModuleLoader__.load({
       );
     }
 
+    /**
+     * 区块卡片。
+     *
+     * `hint` 默认渲染成**标题右侧的 `?` 悬停提示**，而不是占一整行的说明段。
+     * 理由：卡片说明都是"这块是干什么的"的描述性文字，读完一次就不再看，
+     * 摊在卡片头里却要一直占两行——十几张卡叠起来，页面被撑得很长。
+     * 个别确实需要常驻的（比如出错时要一眼看到），传 hintMode="inline"。
+     */
     function Card(props) {
+      const asTip = props.hintMode !== 'inline';
       return h('section', { className: 'dsp-card' },
-        h('h3', { className: 'dsp-card-title' }, props.title),
-        props.hint ? h('p', { className: 'dsp-card-hint' }, props.hint) : null,
+        h('h3', { className: 'dsp-card-title' },
+          props.title,
+          props.hint && asTip ? h(Tooltip, { text: props.hint }) : null,
+        ),
+        props.hint && !asTip ? h('p', { className: 'dsp-card-hint' }, props.hint) : null,
         props.children,
       );
     }

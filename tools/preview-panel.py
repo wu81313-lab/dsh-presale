@@ -61,11 +61,12 @@ STATUS_EXPANDED = """
 """
 
 # 「总开关」卡片（与 client.js 渲染结构一致）。
-# 关键点：三个维护动作折在 details 里，日常只看到「保存开关 / 开始 / 停止」一行。
+# 关键点：
+#   · 卡片说明收成标题右侧的 ? 提示点，不再占一整行；
+#   · 三个维护动作折在 details 里。
 SWITCH_CARD = """
 <section class="dsp-card">
-  <h3 class="dsp-card-title">总开关</h3>
-  <p class="dsp-card-hint">建议先用「试运行」把文案和 @ 判定调准，确认无误后再关掉试运行让它真发消息。</p>
+  <h3 class="dsp-card-title">总开关<button type="button" class="dsp-hint" title="建议先用「试运行」把文案和 @ 判定调准，确认无误后再关掉试运行让它真发消息。">?</button></h3>
   <div class="dsp-row">
     <div class="dsp-label">启用监听</div>
     <label class="dsp-check"><input type="checkbox" checked> 开启</label>
@@ -91,6 +92,17 @@ SWITCH_CARD = """
   </details>
 </section>
 """
+
+# 悬停时的样子：气泡用 position:fixed（预览里直接给坐标，模拟 JS 量出来的位置）
+SWITCH_CARD_HOVER = SWITCH_CARD.replace(
+    '<button type="button" class="dsp-hint"',
+    '<button type="button" aria-expanded="true" class="dsp-hint"',
+).replace(
+    '</section>',
+    '<div class="dsp-tip" role="tooltip" style="left:200px;top:132px">'
+    '建议先用「试运行」把文案和 @ 判定调准，确认无误后再关掉试运行让它真发消息。</div></section>',
+    1,
+)
 
 # 与 client.js 的 Card 组件等价的普通卡片
 CARD_SAMPLE = """
@@ -158,39 +170,86 @@ body { margin: 0; padding: 24px; background: #f1f3f5; }
 </style></head>
 <body>
   <div class="pane">
-    <h2>① 总开关（维护动作折在「▸ 维护」里）</h2>
+    <h2>① 总开关（说明收成标题旁的 ? 提示点）</h2>
     <div class="surface"><div class="dsp-root">{SWITCH_CARD}</div></div>
   </div>
   <div class="pane">
-    <h2>② 运行状态 · 收起（默认）</h2>
+    <h2>② 总开关 · 悬停 ? 时的气泡</h2>
+    <div class="surface"><div class="dsp-root">{SWITCH_CARD_HOVER}</div></div>
+  </div>
+  <div class="pane">
+    <h2>③ 运行状态 · 收起（默认）</h2>
     <div class="surface"><div class="dsp-root">{STATUS_COLLAPSED}</div></div>
   </div>
   <div class="pane">
-    <h2>③ 运行状态 · 展开（点右侧箭头）</h2>
+    <h2>④ 运行状态 · 展开（点右侧箭头）</h2>
     <div class="surface"><div class="dsp-root">{STATUS_EXPANDED}</div></div>
-  </div>
-  <div class="pane">
-    <h2>④ 对照：普通卡片不受影响</h2>
-    <div class="surface"><div class="dsp-root">{CARD_SAMPLE}</div></div>
   </div>
 </body></html>
 """
+
+    # --tip：只渲染「悬停气泡」那一块。
+    # 为什么需要单独一个模式：气泡是 position:fixed，整页截图时它会落到
+    # 别的区块上，看不出真实效果。单独一屏最清楚。
+    if "--tip" in sys.argv:
+        tip_html = f"""<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8"><title>悬停提示预览</title>
+<style>{token_fallback}{css}
+.pane .surface {{ padding: 16px; }}
+</style></head>
+<body>
+  <div class="pane">
+    <h2>总开关 · 悬停标题旁的 ？</h2>
+    <div class="surface"><div class="dsp-root">{SWITCH_CARD_HOVER}</div></div>
+  </div>
+</body></html>
+"""
+        OUT_HTML.write_text(tip_html, encoding="utf-8")
+        if OUT_PNG.exists():
+            OUT_PNG.unlink()
+        uri = "file:///" + str(OUT_HTML).replace("\\", "/").replace(" ", "%20")
+        subprocess.run(
+            [browser, "--headless", "--disable-gpu", "--hide-scrollbars",
+             "--force-device-scale-factor=2", "--window-size=760,480",
+             f"--screenshot={OUT_PNG}", uri],
+            capture_output=True, text=True,
+        )
+        if OUT_PNG.exists():
+            print(f"已生成 {OUT_PNG}  （{OUT_PNG.stat().st_size / 1024:.1f} KB）（仅气泡）")
+            return 0
+        print("截图失败")
+        return 1
 
     OUT_HTML.write_text(html, encoding="utf-8")
     if OUT_PNG.exists():
         OUT_PNG.unlink()
 
+    # --only N：只渲染第 N 块（1 起）——同样为了避开 fixed 气泡的干扰。
+    only = None
+    if "--only" in sys.argv:
+        only = int(sys.argv[sys.argv.index("--only") + 1])
+        # 把其余 pane 藏起来（保留为不可见，避免影响布局计算）
+        parts = html.split('<div class="pane">')
+        head, panes = parts[0], parts[1:]
+        for i in range(len(panes)):
+            if i + 1 != only:
+                panes[i] = panes[i].replace(
+                    '<div class="pane">', '<div class="pane" style="display:none">', 1)
+        html = head + '<div class="pane">'.join(panes)
+        OUT_HTML.write_text(html, encoding="utf-8")
+
     uri = "file:///" + str(OUT_HTML).replace("\\", "/").replace(" ", "%20")
     proc = subprocess.run(
         [browser, "--headless", "--disable-gpu", "--hide-scrollbars",
-         "--force-device-scale-factor=2", "--window-size=780,760",
+         "--force-device-scale-factor=2", "--window-size=780,600",
          f"--screenshot={OUT_PNG}", uri],
         capture_output=True, text=True,
     )
     if not OUT_PNG.exists():
         print("截图失败：", proc.stderr[:400])
         return 1
-    print(f"已生成 {OUT_PNG}  （{OUT_PNG.stat().st_size / 1024:.1f} KB）")
+    label = f"（仅第 {only} 块）" if only else ""
+    print(f"已生成 {OUT_PNG}  （{OUT_PNG.stat().st_size / 1024:.1f} KB）{label}")
     print(f"HTML 源：{OUT_HTML}")
     return 0
 
