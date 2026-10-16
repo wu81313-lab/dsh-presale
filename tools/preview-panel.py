@@ -63,11 +63,24 @@ STATUS_EXPANDED = """
 # 「总开关」卡片（与 client.js 渲染结构一致）。
 # 关键点：
 #   · 卡片说明挂在**标题**上（悬停标题出气泡），没有额外的 ? 圆点；
-#   · 监听启停是一个状态开关（开=绿 / 关=红），不是两个按钮；
+#   · 「保存开关」与监听状态开关在**标题行右侧**，不再另起一行占高度；
 #   · 三个维护动作折在 details 里。
 SWITCH_CARD = """
 <section class="dsp-card">
-  <h3 class="dsp-card-title"><span class="dsp-tiptrigger" title="建议先用「试运行」把文案和 @ 判定调准，确认无误后再关掉试运行让它真发消息。">总开关</span></h3>
+  <h3 class="dsp-card-title dsp-card-title-row">
+    <span class="dsp-card-title-text"><span class="dsp-tiptrigger" title="建议先用「试运行」把文案和 @ 判定调准，确认无误后再关掉试运行让它真发消息。">总开关</span></span>
+    <span class="dsp-card-action">
+      <button class="dsp-btn dsp-btn-primary dsp-btn-sm">保存开关</button>
+      <label class="dsp-switch on" title="点击停止监听">
+        <input type="checkbox" checked>
+        <span class="dsp-switch-track">
+          <span class="dsp-switch-text">On</span>
+          <span class="dsp-switch-thumb"></span>
+        </span>
+        <span class="dsp-switch-caption">监听中</span>
+      </label>
+    </span>
+  </h3>
   <div class="dsp-row">
     <div class="dsp-label">启用监听</div>
     <label class="dsp-check"><input type="checkbox" checked> 开启</label>
@@ -75,18 +88,6 @@ SWITCH_CARD = """
   <div class="dsp-row">
     <div class="dsp-label"><span class="dsp-tiptrigger" title="开启时一切照常执行（读消息、判销售、组装文案），但只在活动日志里记录「本该发什么」，不会真的发到群里。">试运行 dryRun</span></div>
     <label class="dsp-check"><input type="checkbox"> 真实发送到群</label>
-  </div>
-  <div class="dsp-actions" style="margin-top:14px">
-    <button class="dsp-btn dsp-btn-primary">保存开关</button>
-    <label class="dsp-switch on" title="点击停止监听">
-      <input type="checkbox" checked>
-      <span class="dsp-switch-track">
-        <span class="dsp-switch-text">On</span>
-        <span class="dsp-switch-thumb"></span>
-      </span>
-      <span class="dsp-switch-caption">监听中</span>
-    </label>
-    <div class="dsp-spacer"></div>
   </div>
   <details class="dsp-maintain">
     <summary>维护（排查用，平时不需要动）</summary>
@@ -99,12 +100,15 @@ SWITCH_CARD = """
 </section>
 """
 
-# 「已停止」状态：开关变红（state-error-primary），一眼看出功能没在工作
-SWITCH_CARD_OFF = SWITCH_CARD.replace(
-    '<label class="dsp-switch on" title="点击停止监听">\n      <input type="checkbox" checked>',
-    '<label class="dsp-switch" title="点击开始监听">\n      <input type="checkbox">',
-).replace('<span class="dsp-switch-text">On</span>', '<span class="dsp-switch-text">Off</span>'
-).replace('<span class="dsp-switch-caption">监听中</span>', '<span class="dsp-switch-caption">已停止</span>')
+# 「已停止」状态：开关变红（state-error-primary），一眼看出功能没在工作。
+# 注意：替换串不要带缩进——之前依赖了 6 空格缩进，后来结构一改（变 8 空格）
+# 就静默失配，预览里"已停止"那张仍显示绿色，白核对了一轮。
+SWITCH_CARD_OFF = (SWITCH_CARD
+                   .replace('<label class="dsp-switch on"', '<label class="dsp-switch"')
+                   .replace('<input type="checkbox" checked>', '<input type="checkbox">', 1)
+                   .replace('<span class="dsp-switch-text">On</span>', '<span class="dsp-switch-text">Off</span>')
+                   .replace('<span class="dsp-switch-caption">监听中</span>', '<span class="dsp-switch-caption">已停止</span>'))
+assert 'dsp-switch on' not in SWITCH_CARD_OFF, 'SWITCH_CARD_OFF 替换失败：开关仍是 on 态'
 
 # 悬停标题时的样子。
 # 气泡是 position:fixed，且**水平居中于触发区**——触发区是整行标题（卡片宽度），
@@ -321,6 +325,41 @@ body { margin: 0; padding: 24px; background: #f1f3f5; }
         )
         if OUT_PNG.exists():
             print(f"已生成 {OUT_PNG}  （{OUT_PNG.stat().st_size / 1024:.1f} KB）（仅折叠组）")
+            return 0
+        print("截图失败")
+        return 1
+
+    # --switch：只渲染「总开关」那一块（监听中 / 已停止两态）。
+    if "--switch" in sys.argv:
+        sw_html = f"""<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8"><title>总开关</title>
+<style>{token_fallback}{css}
+.pane .surface {{ padding: 16px; }}
+.dsp-root {{ gap: 16px; }}
+</style></head>
+<body>
+  <div class="pane">
+    <h2>① 监听中 —— 保存与开关在标题行右侧，不再另起一行</h2>
+    <div class="surface"><div class="dsp-root">{SWITCH_CARD}</div></div>
+  </div>
+  <div class="pane">
+    <h2>② 已停止 —— 开关转红</h2>
+    <div class="surface"><div class="dsp-root">{SWITCH_CARD_OFF}</div></div>
+  </div>
+</body></html>
+"""
+        OUT_HTML.write_text(sw_html, encoding="utf-8")
+        if OUT_PNG.exists():
+            OUT_PNG.unlink()
+        uri = "file:///" + str(OUT_HTML).replace("\\", "/").replace(" ", "%20")
+        subprocess.run(
+            [browser, "--headless", "--disable-gpu", "--hide-scrollbars",
+             "--force-device-scale-factor=2", "--window-size=800,620",
+             f"--screenshot={OUT_PNG}", uri],
+            capture_output=True, text=True,
+        )
+        if OUT_PNG.exists():
+            print(f"已生成 {OUT_PNG}  （{OUT_PNG.stat().st_size / 1024:.1f} KB）（仅总开关）")
             return 0
         print("截图失败")
         return 1

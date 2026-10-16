@@ -74,6 +74,12 @@ window.__ModuleLoader__.load({
 .dsp-root { display: flex; flex-direction: column; gap: 18px; padding: 4px 2px 24px; }
 .dsp-card { border: 1px solid var(--dsw-alias-border, rgba(128,128,128,.24)); border-radius: 12px; padding: 16px; background: var(--dsw-alias-bg-layer, transparent); }
 .dsp-card-title { font-size: 14px; font-weight: 600; margin: 0 0 4px; color: var(--dsw-alias-text-1, inherit); }
+/* 标题行带右侧操作位时改为 flex：标题占满、操作贴右，
+   把那块一直空着的右侧空间用起来。 */
+.dsp-card-title-row { display: flex; align-items: center; gap: 12px; margin-bottom: 8px; }
+.dsp-card-title-text { flex: 1; min-width: 0; }
+.dsp-card-action { display: flex; align-items: center; gap: 10px; flex: none; flex-wrap: wrap;
+  justify-content: flex-end; }
 .dsp-card-hint { font-size: 12px; line-height: 1.6; margin: 0 0 12px; color: var(--dsw-alias-text-3, rgba(128,128,128,.9)); }
 /* 折叠箭头：收起朝下、展开朝上。做成按钮以便键盘可达。 */
 .dsp-caret { display: inline-flex; align-items: center; justify-content: center; flex: none; width: 24px; height: 24px; padding: 0; border: 0; border-radius: 6px; background: 0 0; cursor: pointer; font: inherit; font-size: 13px; line-height: 1; color: var(--dsw-alias-label-secondary, rgba(128,128,128,.9)); transition: transform .16s, background .16s; }
@@ -91,6 +97,9 @@ window.__ModuleLoader__.load({
 .dsp-btn:hover:not(:disabled) { background: var(--dsw-alias-bg-hover, rgba(128,128,128,.12)); }
 .dsp-btn:disabled { opacity: .5; cursor: not-allowed; }
 .dsp-btn-primary { background: var(--dsw-alias-brand, #4b7bec); border-color: var(--dsw-alias-brand, #4b7bec); color: #fff; }
+/* 标题行里的小按钮：比常规按钮矮一点、也窄一点。
+   标题行只有 14px 高，用常规按钮会把整行撑高，也与标题不协调。 */
+.dsp-btn-sm { padding: 5px 12px; font-size: 12px; border-radius: 6px; }
 .dsp-btn-danger { color: var(--dsw-alias-danger, #d64545); border-color: var(--dsw-alias-danger, #d64545); }
 .dsp-badge { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; padding: 3px 9px; border-radius: 999px; border: 1px solid var(--dsw-alias-border, rgba(128,128,128,.3)); }
 .dsp-badge-ok { color: var(--dsw-alias-success, #2f9e44); border-color: currentColor; }
@@ -347,12 +356,23 @@ window.__ModuleLoader__.load({
      * 摊在卡片头里却要一直占两行——十几张卡叠起来，页面被撑得很长。
      * 个别确实需要常驻的（比如出错时要一眼看到），传 hintMode="inline"。
      */
+    /**
+     * `action` 会渲染在标题行**右侧**。
+     *
+     * 为什么加这个：卡片标题是块级元素、只占文字宽度，右边一直是空着的；
+     * 而"保存"和"启停"这类操作原本被放在卡片底部另起一行，等于白占一行高度。
+     * 放到标题行右侧既填了那块空白，也让"这张卡的开关 + 保存"聚在一起，
+     * 不用在卡片两端来回找。
+     */
     function Card(props) {
       const asTip = props.hintMode !== 'inline';
       return h('section', { className: 'dsp-card' },
-        h('h3', { className: 'dsp-card-title' },
+        h('h3', { className: `dsp-card-title${props.action ? ' dsp-card-title-row' : ''}` },
           // Tooltip 自带包裹 span，标题文字直接作为子节点，不再多套一层
-          asTip && props.hint ? h(Tooltip, { text: props.hint }, props.title) : props.title,
+          h('span', { className: 'dsp-card-title-text' },
+            asTip && props.hint ? h(Tooltip, { text: props.hint }, props.title) : props.title,
+          ),
+          props.action ? h('span', { className: 'dsp-card-action' }, props.action) : null,
         ),
         props.hint && !asTip ? h('p', { className: 'dsp-card-hint' }, props.hint) : null,
         props.children,
@@ -568,6 +588,49 @@ window.__ModuleLoader__.load({
         h(Card, {
           title: '总开关',
           hint: '建议先用「试运行」把文案和 @ 判定调准，确认无误后再关掉试运行让它真发消息。',
+          // 「保存开关」与监听开关放到标题行右侧：
+          // 原来它们在卡片底部另起一行，而标题行右边一直是空的。
+          // 挪上去既填了那块空白，也让"这张卡的开关 + 保存"聚在一处。
+          action: [
+            h('button', {
+              key: 'save',
+              className: 'dsp-btn dsp-btn-primary dsp-btn-sm',
+              disabled: busy === 'save',
+              onClick: () => void save({ enabled: settings.enabled, dryRun: settings.dryRun }),
+            }, '保存开关'),
+            // 监听启停：一个状态开关，而不是「开始 / 停止」两个按钮。
+            //
+            // 原来两个按钮并排摆着，用户得先读文字才知道当前是开还是关，
+            // 而且"停止监听"在已经停止时仍然可点，容易误以为出问题。
+            // 开关的**位置**本身就表达状态（左关右开），一眼可读。
+            //
+            // 状态读自 poller（实际运行状态），不是读 settings 草稿——
+            // 否则改了勾选框还没保存时，开关会显示成另一个状态，跟实际不符。
+            h('label', {
+              key: 'switch',
+              className: `dsp-switch${listening ? ' on' : ''}${busy !== '' ? ' busy' : ''}`,
+              title: listening ? '点击停止监听' : '点击开始监听',
+            },
+              h('input', {
+                type: 'checkbox',
+                checked: listening,
+                disabled: busy !== '',
+                onChange: () => void act(listening ? 'stop' : 'start', listening ? '/stop' : '/start'),
+              }),
+              h('span', { className: 'dsp-switch-track' },
+                // On/Off 由 React 渲染在滑块上（不用 ::after 生成内容，
+                // 否则读屏软件拿不到这两个字）。忙碌时用省略号代替，
+                // 避免"点了没反应"的错觉。
+                h('span', { className: 'dsp-switch-text' },
+                  busy === 'start' || busy === 'stop' ? '…' : (listening ? 'On' : 'Off')),
+                h('span', { className: 'dsp-switch-thumb' }),
+              ),
+              h('span', { className: 'dsp-switch-caption' },
+                busy === 'start' ? '启动中…'
+                  : busy === 'stop' ? '停止中…'
+                  : (listening ? '监听中' : '已停止')),
+            ),
+          ],
         },
           h(Field, { label: '启用监听' },
             h('label', { className: 'dsp-check' },
@@ -591,41 +654,6 @@ window.__ModuleLoader__.load({
               }),
               settings.dryRun ? '只记录，不发送' : '真实发送到群',
             ),
-          ),
-          h('div', { className: 'dsp-actions', style: { marginTop: 14 } },
-            h('button', { className: 'dsp-btn dsp-btn-primary', disabled: busy === 'save', onClick: () => void save({ enabled: settings.enabled, dryRun: settings.dryRun }) }, '保存开关'),
-            // 监听启停：一个状态开关，而不是「开始 / 停止」两个按钮。
-            //
-            // 原来两个按钮并排摆着，用户得先读文字才知道当前是开还是关，
-            // 而且"停止监听"在已经停止时仍然可点，容易误以为出问题。
-            // 开关的**位置**本身就表达状态（左关右开），一眼可读。
-            //
-            // 状态读自 poller（实际运行状态），不是读 settings 草稿——
-            // 否则改了勾选框还没保存时，开关会显示成另一个状态，跟实际不符。
-            h('label', {
-              className: `dsp-switch${listening ? ' on' : ''}${busy !== '' ? ' busy' : ''}`,
-              title: listening ? '点击停止监听' : '点击开始监听',
-            },
-              h('input', {
-                type: 'checkbox',
-                checked: listening,
-                disabled: busy !== '',
-                onChange: () => void act(listening ? 'stop' : 'start', listening ? '/stop' : '/start'),
-              }),
-              h('span', { className: 'dsp-switch-track' },
-                // On/Off 由 React 渲染在滑块上（不用 ::after 生成内容，
-                // 否则读屏软件拿不到这两个字）。忙碌时用省略号代替，
-                // 避免"点了没反应"的错觉。
-                h('span', { className: 'dsp-switch-text' },
-                  busy === 'start' || busy === 'stop' ? '…' : (listening ? 'On' : 'Off')),
-                h('span', { className: 'dsp-switch-thumb' }),
-              ),
-              h('span', { className: 'dsp-switch-caption' },
-                busy === 'start' ? '启动中…'
-                  : busy === 'stop' ? '停止中…'
-                  : (listening ? '监听中' : '已停止')),
-            ),
-            h('div', { className: 'dsp-spacer' }),
           ),
           // 维护动作收进折叠区。
           //
