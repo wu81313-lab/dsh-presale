@@ -115,6 +115,30 @@ window.__ModuleLoader__.load({
   border-top: .5px solid var(--dsw-alias-border-l2, rgba(128,128,128,.16));
   font-size: 13px; font-weight: 600; color: var(--dsw-alias-text-1, inherit); }
 
+/* ── 折叠组（「高级设置」）─────────────────────────────────
+   把不常用的几张卡收在一起，主屏只留日常要动的那几张。
+   用原生 details：开合由浏览器处理，不需要 JS 也不需要状态。 */
+.dsp-group { border: 1px solid var(--dsw-alias-border, rgba(128,128,128,.24));
+  border-radius: 12px; background: var(--dsw-alias-bg-layer, transparent); }
+.dsp-group > summary { display: flex; align-items: center; gap: 8px;
+  padding: 14px 16px; cursor: pointer; list-style: none; font-size: 14px;
+  font-weight: 600; color: var(--dsw-alias-text-1, inherit); border-radius: 12px; }
+.dsp-group > summary:hover { background: var(--dsw-alias-bg-hover, rgba(128,128,128,.06)); }
+.dsp-group > summary::-webkit-details-marker { display: none; }
+.dsp-group > summary::before { content: '▸'; flex: none; font-size: 10px;
+  color: var(--dsw-alias-label-tertiary, rgba(128,128,128,.9)); }
+.dsp-group[open] > summary::before { content: '▾'; }
+.dsp-group[open] > summary { border-bottom: .5px solid var(--dsw-alias-border-l2, rgba(128,128,128,.16));
+  border-radius: 12px 12px 0 0; }
+.dsp-group-label { flex: 1; min-width: 0; }
+/* 收起时也能看到里面配成了什么（例如当前模型），不必为了确认而展开 */
+.dsp-group-sum { flex: none; font-size: 12px; font-weight: 400;
+  color: var(--dsw-alias-label-tertiary, rgba(128,128,128,.9)); }
+/* 组内卡片去掉各自的边框，只靠间距区分——避免"框里套框" */
+.dsp-group-body { display: flex; flex-direction: column; gap: 18px; padding: 18px; }
+.dsp-group-body > .dsp-card { border: 0; border-radius: 0; padding: 0; background: 0 0; }
+.dsp-group-body > .dsp-card + .dsp-card { border-top: .5px solid var(--dsw-alias-border-l2, rgba(128,128,128,.16)); padding-top: 18px; }
+
 /* ── 状态开关（监听启停用）──────────────────────────────────
    把「开始监听 / 停止监听」两个按钮合成一个开关：
      · 两个按钮同时摆着，用户得先读文字才知道当前是开还是关；
@@ -335,6 +359,25 @@ window.__ModuleLoader__.load({
       );
     }
 
+    /**
+     * 折叠组：把若干张不常用的卡收在一起。
+     *
+     * 用原生 details —— 开合交给浏览器，不需要 JS、不需要状态，
+     * 也不会像受控组件那样在重渲染时把用户的展开状态重置掉。
+     *
+     * `summary` 右侧显示一行摘要（例如当前用的模型），
+     * 这样收起时也能一眼看出里面配成了什么，不用为了确认而展开。
+     */
+    function Group(props) {
+      return h('details', { className: 'dsp-group' },
+        h('summary', null,
+          h('span', { className: 'dsp-group-label' }, props.label),
+          props.summary ? h('span', { className: 'dsp-group-sum' }, props.summary) : null,
+        ),
+        h('div', { className: 'dsp-group-body' }, props.children),
+      );
+    }
+
     // ─────────────────────────── 主面板 ───────────────────────────
 
     function Panel() {
@@ -453,6 +496,27 @@ window.__ModuleLoader__.load({
       // 读自 poller 的**实际运行状态**，不是 settings.enabled 那个草稿——
       // 否则用户改了勾选框还没保存时，开关会显示成与实际不符的状态。
       const listening = poller.running === true;
+
+      /**
+       * 「高级设置」折叠组右侧的摘要。
+       *
+       * 为什么要有：把 6 张卡收起来之后，用户想确认"模型配的是哪个"
+       * 就得先展开再找。摘要让收起状态下也能一眼看到关键配置。
+       * 只列真正影响行为的几项，不堆参数——堆多了摘要自己就成了噪音。
+       */
+      function groupSummary() {
+        const parts = [];
+        const route = llmInfo.route ?? {};
+        if (route.model) parts.push(route.model);
+        // 轮询间隔：写"自动"更诚实——连续无命中时插件会自己拉长间隔，
+        // 这里显示的是基准值而不是当前实际值（实际值在「运行状态」里）
+        const interval = settings.poll?.intervalSeconds;
+        if (interval) parts.push(`轮询 ${interval}s`);
+        parts.push(settings.attachments?.enabled ? '读附件' : '不读附件');
+        const n = activity.length;
+        parts.push(n > 0 ? `日志 ${n} 条` : '暂无日志');
+        return parts.join(' · ');
+      }
 
       // 状态灯：把「为什么没工作」一次说清
       const badges = [];
@@ -781,264 +845,279 @@ window.__ModuleLoader__.load({
 
 
         // ── 轮询 ──────────────────────────────────────────────
-        h(Card, {
-          title: '轮询与性能',
-          hint: '插件用「全局搜索我的消息」来发现触发（一次调用覆盖所有群，不逐群扫）。实测单次约 1 秒；连续无命中时会自动拉长间隔省配额，有命中立刻恢复。',
+        h(Group, {
+          label: '高级设置',
+          summary: groupSummary(),
         },
-          h(Field, { label: '轮询间隔（秒）', hint: '允许 15–300 秒。低于 15 会被自动纠正，避免把钉钉接口配额打爆。默认 30 秒。' },
-            h('input', {
-              className: 'dsp-input',
-              type: 'number',
-              min: 15,
-              max: 300,
-              value: settings.poll.intervalSeconds,
-              onChange: e => edit('poll.intervalSeconds', Number(e.target.value)),
-            }),
-          ),
-          h(Field, { label: '时间窗重叠（秒）', hint: '搜索时向前多取一段时间，防止服务端索引延迟导致漏消息。默认 120 秒。' },
-            h('input', {
-              className: 'dsp-input',
-              type: 'number',
-              min: 10,
-              max: 3600,
-              value: settings.poll.windowOverlapSeconds,
-              onChange: e => edit('poll.windowOverlapSeconds', Number(e.target.value)),
-            }),
-          ),
-          h(Field, { label: '无命中退避上限（秒）', hint: '一直没命中时，间隔最多拉长到这个值。默认 300 秒。' },
-            h('input', {
-              className: 'dsp-input',
-              type: 'number',
-              min: 60,
-              max: 3600,
-              value: settings.poll.backoffMaxSeconds,
-              onChange: e => edit('poll.backoffMaxSeconds', Number(e.target.value)),
-            }),
-          ),
-          h('div', { className: 'dsp-actions', style: { marginTop: 12 } },
-            h('button', {
-              className: 'dsp-btn dsp-btn-primary',
-              disabled: busy === 'save',
-              onClick: () => void save({ poll: settings.poll }),
-            }, '保存轮询设置'),
-          ),
-        ),
-
-        // ── 公司名 / 使用者名 ──────────────────────────────────
-        h(Card, {
-          title: '公司名与署名',
-          hint: '提示词里可以用 {company} 和 {owner} 两个占位符，发送前会被替换成下面的值。',
-        },
-          h(Field, { label: '公司名（提示词里的 {company}）', hint: '让模型以你的公司口吻说话。留空则显示为「我们公司」。' },
-            h('input', {
-              className: 'dsp-input',
-              value: settings.company ?? '',
-              placeholder: '例如：示例智能科技',
-              onChange: e => edit('company', e.target.value),
-            }),
-          ),
-          h(Field, {
-            label: '使用者名（提示词里的 {owner}）',
-            hint: '默认提示词末尾的署名「本消息由{owner}AI售前助理发出」会用它替换。留空则把整行署名去掉——不发读不通的半句。',
+          h(Card, {
+            title: '轮询与性能',
+            hint: '插件用「全局搜索我的消息」来发现触发（一次调用覆盖所有群，不逐群扫）。实测单次约 1 秒；连续无命中时会自动拉长间隔省配额，有命中立刻恢复。',
           },
-            h('input', {
-              className: 'dsp-input',
-              value: settings.ownerName ?? '',
-              placeholder: '例如：张三',
-              onChange: e => edit('ownerName', e.target.value),
-            }),
+            h(Field, { label: '轮询间隔（秒）', hint: '允许 15–300 秒。低于 15 会被自动纠正，避免把钉钉接口配额打爆。默认 30 秒。' },
+              h('input', {
+                className: 'dsp-input',
+                type: 'number',
+                min: 15,
+                max: 300,
+                value: settings.poll.intervalSeconds,
+                onChange: e => edit('poll.intervalSeconds', Number(e.target.value)),
+              }),
+            ),
+            h(Field, { label: '时间窗重叠（秒）', hint: '搜索时向前多取一段时间，防止服务端索引延迟导致漏消息。默认 120 秒。' },
+              h('input', {
+                className: 'dsp-input',
+                type: 'number',
+                min: 10,
+                max: 3600,
+                value: settings.poll.windowOverlapSeconds,
+                onChange: e => edit('poll.windowOverlapSeconds', Number(e.target.value)),
+              }),
+            ),
+            h(Field, { label: '无命中退避上限（秒）', hint: '一直没命中时，间隔最多拉长到这个值。默认 300 秒。' },
+              h('input', {
+                className: 'dsp-input',
+                type: 'number',
+                min: 60,
+                max: 3600,
+                value: settings.poll.backoffMaxSeconds,
+                onChange: e => edit('poll.backoffMaxSeconds', Number(e.target.value)),
+              }),
+            ),
+            h('div', { className: 'dsp-actions', style: { marginTop: 12 } },
+              h('button', {
+                className: 'dsp-btn dsp-btn-primary',
+                disabled: busy === 'save',
+                onClick: () => void save({ poll: settings.poll }),
+              }, '保存轮询设置'),
+            ),
           ),
-        ),
 
-        // ── 模型 ──────────────────────────────────────────────
-        h(Card, {
-          title: '模型',
-          hint: '默认 DeepSeek-V4.1-Flash（deepseek-account / deepseek-flash）。上方「运行状态」里的 LLM 路由会显示实际用的是哪个；若来源标为 auto，说明默认 provider 未注册、已自动换用别的模型，建议在这里显式指定。',
-        },
-          h(Field, { label: 'provider' },
-            h('input', {
-              className: 'dsp-input',
-              value: settings.llm.provider ?? '',
-              placeholder: 'deepseek-account',
-              onChange: e => edit('llm.provider', e.target.value),
-            }),
+          // ── 公司名 / 使用者名 ──────────────────────────────────
+          h(Card, {
+            title: '公司名与署名',
+            hint: '提示词里可以用 {company} 和 {owner} 两个占位符，发送前会被替换成下面的值。',
+          },
+            h(Field, { label: '公司名（提示词里的 {company}）', hint: '让模型以你的公司口吻说话。留空则显示为「我们公司」。' },
+              h('input', {
+                className: 'dsp-input',
+                value: settings.company ?? '',
+                placeholder: '例如：示例智能科技',
+                onChange: e => edit('company', e.target.value),
+              }),
+            ),
+            h(Field, {
+              label: '使用者名（提示词里的 {owner}）',
+              hint: '默认提示词末尾的署名「本消息由{owner}AI售前助理发出」会用它替换。留空则把整行署名去掉——不发读不通的半句。',
+            },
+              h('input', {
+                className: 'dsp-input',
+                value: settings.ownerName ?? '',
+                placeholder: '例如：张三',
+                onChange: e => edit('ownerName', e.target.value),
+              }),
+            ),
+            // 这张卡原先**没有保存按钮**——`edit()` 只写本地草稿，
+            // 用户改完这两格如果没去点别的卡的保存，刷新后改动就没了。
+            // 补齐，与其他卡一致。
+            h('div', { className: 'dsp-actions', style: { marginTop: 12 } },
+              h('button', {
+                className: 'dsp-btn dsp-btn-primary',
+                disabled: busy === 'save',
+                onClick: () => void save({ company: settings.company, ownerName: settings.ownerName }),
+              }, '保存署名'),
+            ),
           ),
-          h(Field, { label: 'model' },
-            h('input', {
-              className: 'dsp-input',
-              value: settings.llm.model ?? '',
-              placeholder: 'deepseek-flash',
-              onChange: e => edit('llm.model', e.target.value),
-            }),
-          ),
-          h(Field, { label: '最长等待（毫秒）', hint: '需求梳理可能比较慢，超时会记失败而不是返回半截结果。默认 60000。' },
-            h('input', {
-              className: 'dsp-input',
-              type: 'number',
-              min: 5000,
-              max: 600000,
-              value: settings.llm.timeoutMs,
-              onChange: e => edit('llm.timeoutMs', Number(e.target.value)),
-            }),
-          ),
-          h('div', { className: 'dsp-actions', style: { marginTop: 12 } },
-            h('button', {
-              className: 'dsp-btn dsp-btn-primary',
-              disabled: busy === 'save',
-              onClick: () => void save({ llm: settings.llm }),
-            }, '保存模型设置'),
-          ),
-        ),
 
-        // ── 附件读取 ──────────────────────────────────────────
-        h(Card, {
-          title: '附件读取',
-          hint: '钉钉服务端没有「在线读文件正文」的接口，文件必须先下载到本地才能解析。开启后，「梳理项目需求」会把群里的 docx / xlsx / txt 下载并提取正文交给模型——很多人只在群里丢一个需求文档就完事，不读附件等于漏掉核心需求。',
-        },
-          h(Field, { label: '读取群文件', hint: '关闭则只依据聊天文字，文件仅记录不解析。' },
-            h('input', {
-              type: 'checkbox',
-              checked: settings.attachments.enabled,
-              onChange: e => edit('attachments.enabled', e.target.checked),
-            }),
+          // ── 模型 ──────────────────────────────────────────────
+          h(Card, {
+            title: '模型',
+            hint: '默认 DeepSeek-V4.1-Flash（deepseek-account / deepseek-flash）。上方「运行状态」里的 LLM 路由会显示实际用的是哪个；若来源标为 auto，说明默认 provider 未注册、已自动换用别的模型，建议在这里显式指定。',
+          },
+            h(Field, { label: 'provider' },
+              h('input', {
+                className: 'dsp-input',
+                value: settings.llm.provider ?? '',
+                placeholder: 'deepseek-account',
+                onChange: e => edit('llm.provider', e.target.value),
+              }),
+            ),
+            h(Field, { label: 'model' },
+              h('input', {
+                className: 'dsp-input',
+                value: settings.llm.model ?? '',
+                placeholder: 'deepseek-flash',
+                onChange: e => edit('llm.model', e.target.value),
+              }),
+            ),
+            h(Field, { label: '最长等待（毫秒）', hint: '需求梳理可能比较慢，超时会记失败而不是返回半截结果。默认 60000。' },
+              h('input', {
+                className: 'dsp-input',
+                type: 'number',
+                min: 5000,
+                max: 600000,
+                value: settings.llm.timeoutMs,
+                onChange: e => edit('llm.timeoutMs', Number(e.target.value)),
+              }),
+            ),
+            h('div', { className: 'dsp-actions', style: { marginTop: 12 } },
+              h('button', {
+                className: 'dsp-btn dsp-btn-primary',
+                disabled: busy === 'save',
+                onClick: () => void save({ llm: settings.llm }),
+              }, '保存模型设置'),
+            ),
           ),
-          h(Field, { label: '单轮文件数上限', hint: '防止一个群刷了几十个附件的极端情况。默认 5。' },
-            h('input', {
-              className: 'dsp-input',
-              type: 'number',
-              min: 1,
-              max: 50,
-              value: settings.attachments.maxFilesPerRun,
-              onChange: e => edit('attachments.maxFilesPerRun', Number(e.target.value)),
-            }),
-          ),
-          h(Field, { label: '单文件大小上限（字节）', hint: '超过就跳过并记明原因。默认 10MB。' },
-            h('input', {
-              className: 'dsp-input',
-              type: 'number',
-              min: 1024,
-              value: settings.attachments.maxFileBytes,
-              onChange: e => edit('attachments.maxFileBytes', Number(e.target.value)),
-            }),
-          ),
-          h(Field, { label: '单文件注入字数上限', hint: '默认 12000 字。表格类文件往往很长，适当限制可避免挤掉聊天记录。' },
-            h('input', {
-              className: 'dsp-input',
-              type: 'number',
-              min: 500,
-              value: settings.attachments.maxCharsPerFile,
-              onChange: e => edit('attachments.maxCharsPerFile', Number(e.target.value)),
-            }),
-          ),
-          h(Field, { label: '全部附件总字数上限', hint: '默认 30000 字。超出会按顺序截断，并在提示词里显式告知模型。' },
-            h('input', {
-              className: 'dsp-input',
-              type: 'number',
-              min: 1000,
-              value: settings.attachments.maxTotalChars,
-              onChange: e => edit('attachments.maxTotalChars', Number(e.target.value)),
-            }),
-          ),
-          h(Field, { label: '缓存有效期（天）', hint: '超期会重新下载，避免群里文件被替换后仍读旧内容。默认 30 天，填 0 表示永不过期。' },
-            h('input', {
-              className: 'dsp-input',
-              type: 'number',
-              min: 0,
-              max: 3650,
-              value: settings.attachments.cacheTtlDays,
-              onChange: e => edit('attachments.cacheTtlDays', Number(e.target.value)),
-            }),
-          ),
-          h(Field, { label: 'Python 路径（可选）', hint: '只用于解析 PDF。留空则不尝试解析 PDF——找不到解析器时会明确标注「未提取」，不会假装读过。' },
-            h('input', {
-              className: 'dsp-input',
-              value: settings.attachments.pythonPath ?? '',
-              placeholder: '留空 = 不解析 PDF',
-              onChange: e => edit('attachments.pythonPath', e.target.value),
-            }),
-          ),
-        ),
 
-        // ── 附件缓存 ──────────────────────────────────────────
-        h(Card, {
-          title: '附件缓存',
-          hint: '下载的文件与提取出的文本都缓存在这里，同一个文件第二次遇到会直接命中缓存、不再走网络。',
-        },
-          h('div', { className: 'dsp-actions', style: { marginBottom: 10 } },
-            h('button', { className: 'dsp-btn', onClick: () => void loadAttachments() }, '刷新用量'),
-            h('button', { className: 'dsp-btn dsp-btn-danger', disabled: busy !== '', onClick: () => void act('attachclear', '/attachments/clear') }, '清空缓存'),
+          // ── 附件读取 ──────────────────────────────────────────
+          h(Card, {
+            title: '附件读取',
+            hint: '钉钉服务端没有「在线读文件正文」的接口，文件必须先下载到本地才能解析。开启后，「梳理项目需求」会把群里的 docx / xlsx / txt 下载并提取正文交给模型——很多人只在群里丢一个需求文档就完事，不读附件等于漏掉核心需求。',
+          },
+            h(Field, { label: '读取群文件', hint: '关闭则只依据聊天文字，文件仅记录不解析。' },
+              h('input', {
+                type: 'checkbox',
+                checked: settings.attachments.enabled,
+                onChange: e => edit('attachments.enabled', e.target.checked),
+              }),
+            ),
+            h(Field, { label: '单轮文件数上限', hint: '防止一个群刷了几十个附件的极端情况。默认 5。' },
+              h('input', {
+                className: 'dsp-input',
+                type: 'number',
+                min: 1,
+                max: 50,
+                value: settings.attachments.maxFilesPerRun,
+                onChange: e => edit('attachments.maxFilesPerRun', Number(e.target.value)),
+              }),
+            ),
+            h(Field, { label: '单文件大小上限（字节）', hint: '超过就跳过并记明原因。默认 10MB。' },
+              h('input', {
+                className: 'dsp-input',
+                type: 'number',
+                min: 1024,
+                value: settings.attachments.maxFileBytes,
+                onChange: e => edit('attachments.maxFileBytes', Number(e.target.value)),
+              }),
+            ),
+            h(Field, { label: '单文件注入字数上限', hint: '默认 12000 字。表格类文件往往很长，适当限制可避免挤掉聊天记录。' },
+              h('input', {
+                className: 'dsp-input',
+                type: 'number',
+                min: 500,
+                value: settings.attachments.maxCharsPerFile,
+                onChange: e => edit('attachments.maxCharsPerFile', Number(e.target.value)),
+              }),
+            ),
+            h(Field, { label: '全部附件总字数上限', hint: '默认 30000 字。超出会按顺序截断，并在提示词里显式告知模型。' },
+              h('input', {
+                className: 'dsp-input',
+                type: 'number',
+                min: 1000,
+                value: settings.attachments.maxTotalChars,
+                onChange: e => edit('attachments.maxTotalChars', Number(e.target.value)),
+              }),
+            ),
+            h(Field, { label: '缓存有效期（天）', hint: '超期会重新下载，避免群里文件被替换后仍读旧内容。默认 30 天，填 0 表示永不过期。' },
+              h('input', {
+                className: 'dsp-input',
+                type: 'number',
+                min: 0,
+                max: 3650,
+                value: settings.attachments.cacheTtlDays,
+                onChange: e => edit('attachments.cacheTtlDays', Number(e.target.value)),
+              }),
+            ),
+            h(Field, { label: 'Python 路径（可选）', hint: '只用于解析 PDF。留空则不尝试解析 PDF——找不到解析器时会明确标注「未提取」，不会假装读过。' },
+              h('input', {
+                className: 'dsp-input',
+                value: settings.attachments.pythonPath ?? '',
+                placeholder: '留空 = 不解析 PDF',
+                onChange: e => edit('attachments.pythonPath', e.target.value),
+              }),
+            ),
           ),
-          attachmentStats === null
-            ? h('div', { className: 'dsp-note' }, '点「刷新用量」查看缓存占用。')
-            : h('div', null,
-                h('div', { className: 'dsp-card-hint', style: { margin: '0 0 6px 0' } },
-                  `占用 ${(attachmentStats.totalBytes / 1024 / 1024).toFixed(2)} MB｜${attachmentStats.entryCount} 个条目｜${attachmentStats.fileCount} 个文件`),
-                h('div', { className: 'dsp-mono', style: { marginBottom: 8 } }, attachmentStats.cacheDir || '（未启用）'),
-                attachmentStats.entries.length === 0
-                  ? h('div', { className: 'dsp-card-hint', style: { margin: 0 } }, '缓存为空。')
-                  : h('div', null,
-                      ...attachmentStats.entries.slice(0, 20).map((entry, i) => h('div', {
-                        key: entry.hash ?? i,
-                        className: 'dsp-card-hint',
-                        style: { margin: '2px 0 0 0' },
-                      }, `${entry.name}｜${(entry.bytes / 1024).toFixed(1)}KB｜最后访问 ${entry.lastUsedText}`)),
+
+          // ── 附件缓存 ──────────────────────────────────────────
+          h(Card, {
+            title: '附件缓存',
+            hint: '下载的文件与提取出的文本都缓存在这里，同一个文件第二次遇到会直接命中缓存、不再走网络。',
+          },
+            h('div', { className: 'dsp-actions', style: { marginBottom: 10 } },
+              h('button', { className: 'dsp-btn', onClick: () => void loadAttachments() }, '刷新用量'),
+              h('button', { className: 'dsp-btn dsp-btn-danger', disabled: busy !== '', onClick: () => void act('attachclear', '/attachments/clear') }, '清空缓存'),
+            ),
+            attachmentStats === null
+              ? h('div', { className: 'dsp-note' }, '点「刷新用量」查看缓存占用。')
+              : h('div', null,
+                  h('div', { className: 'dsp-card-hint', style: { margin: '0 0 6px 0' } },
+                    `占用 ${(attachmentStats.totalBytes / 1024 / 1024).toFixed(2)} MB｜${attachmentStats.entryCount} 个条目｜${attachmentStats.fileCount} 个文件`),
+                  h('div', { className: 'dsp-mono', style: { marginBottom: 8 } }, attachmentStats.cacheDir || '（未启用）'),
+                  attachmentStats.entries.length === 0
+                    ? h('div', { className: 'dsp-card-hint', style: { margin: 0 } }, '缓存为空。')
+                    : h('div', null,
+                        ...attachmentStats.entries.slice(0, 20).map((entry, i) => h('div', {
+                          key: entry.hash ?? i,
+                          className: 'dsp-card-hint',
+                          style: { margin: '2px 0 0 0' },
+                        }, `${entry.name}｜${(entry.bytes / 1024).toFixed(1)}KB｜最后访问 ${entry.lastUsedText}`)),
+                      ),
+                ),
+          ),
+
+          // ── 活动记录 ──────────────────────────────────────────
+          h(Card, {
+            title: '活动记录',
+            hint: '每轮「发现 → 判定 → 发送/跳过」都记一条。试运行模式下这里是唯一的观察窗口。',
+          },
+            h('div', { className: 'dsp-actions', style: { marginBottom: 10 } },
+              h('button', { className: 'dsp-btn', onClick: () => void refresh() }, '刷新'),
+              h('button', { className: 'dsp-btn dsp-btn-danger', disabled: busy !== '', onClick: () => void act('clear', '/activity/clear') }, '清空记录'),
+              h('div', { className: 'dsp-spacer' }),
+              h('span', { className: 'dsp-card-hint', style: { margin: 0 } }, `共 ${activity.length} 条`),
+            ),
+            activity.length === 0
+              ? h('div', { className: 'dsp-note' }, '暂无记录。若你刚在群里发过关键词，可点上面的「立即检查一次」。')
+              : h('div', { className: 'dsp-log' },
+                  activity.map((e, i) => h('div', { key: e.ts ?? i, className: 'dsp-log-item' },
+                    h('div', null,
+                      h('span', { className: 'dsp-badge' }, `${e.action ?? '?'} / ${e.decision ?? '?'}`),
+                      ' ',
+                      h('span', { className: 'dsp-card-hint', style: { margin: 0 } }, humanTime(e.ts)),
+                      e.conversationName ? `  ${e.conversationName}` : '',
                     ),
-              ),
-        ),
-
-        // ── 活动记录 ──────────────────────────────────────────
-        h(Card, {
-          title: '活动记录',
-          hint: '每轮「发现 → 判定 → 发送/跳过」都记一条。试运行模式下这里是唯一的观察窗口。',
-        },
-          h('div', { className: 'dsp-actions', style: { marginBottom: 10 } },
-            h('button', { className: 'dsp-btn', onClick: () => void refresh() }, '刷新'),
-            h('button', { className: 'dsp-btn dsp-btn-danger', disabled: busy !== '', onClick: () => void act('clear', '/activity/clear') }, '清空记录'),
-            h('div', { className: 'dsp-spacer' }),
-            h('span', { className: 'dsp-card-hint', style: { margin: 0 } }, `共 ${activity.length} 条`),
+                    e.conversationId
+                      ? h('div', { className: 'dsp-mono', style: { marginTop: 2 } }, e.conversationId)
+                      : null,
+                    e.triggerText ? h('div', { style: { marginTop: 2 } }, `触发：${e.triggerText}`) : null,
+                    e.mention && e.mention.mode && e.mention.mode !== 'none'
+                      ? h('div', { style: { marginTop: 2 } }, `@：${e.mention.name || '?'}（${e.mention.mode}${e.mention.confidence ? ` / ${e.mention.confidence}` : ''}）— ${e.mention.reason ?? ''}`)
+                      : null,
+                    // 附件处理结果：排查「模型为什么没读到某个文件」时这是唯一线索
+                    Array.isArray(e.attachments) && e.attachments.length > 0
+                      ? h('div', { style: { marginTop: 4 } },
+                          h('div', { className: 'dsp-card-hint', style: { margin: 0 } }, `附件（${e.attachmentSummary || ''}）：`),
+                          ...e.attachments.map((a, ai) => {
+                            // 三种结果要看得出来：读到正文 / 图片交给模型看 / 没读到
+                            const icon = a.status === 'ok' ? '✔' : a.status === 'image' ? '🖼' : a.status === 'error' ? '✖' : 'ℹ';
+                            const what = a.status === 'ok'
+                              ? `提取 ${a.chars} 字`
+                              : a.status === 'image'
+                                ? '图片已交给模型查看'
+                                : '未提取内容';
+                            return h('div', {
+                              key: ai,
+                              className: 'dsp-card-hint',
+                              style: { margin: '2px 0 0 12px' },
+                            }, `${icon} ${a.name}｜${(a.size / 1024).toFixed(1)}KB｜${what}${a.fromCache ? '｜缓存命中' : ''}${a.note ? `｜${a.note}` : ''}`);
+                          }),
+                        )
+                      : null,
+                    e.error ? h('div', { style: { marginTop: 2, color: 'var(--dsw-alias-danger, #d64545)' } }, `错误：${e.error}`) : null,
+                    e.note ? h('div', { className: 'dsp-card-hint', style: { margin: '2px 0 0 0' } }, e.note) : null,
+                    e.text ? h('pre', { className: 'dsp-pre', style: { marginTop: 6, opacity: .85 } }, e.text.slice(0, 500)) : null,
+                  )),
+                ),
           ),
-          activity.length === 0
-            ? h('div', { className: 'dsp-note' }, '暂无记录。若你刚在群里发过关键词，可点上面的「立即检查一次」。')
-            : h('div', { className: 'dsp-log' },
-                activity.map((e, i) => h('div', { key: e.ts ?? i, className: 'dsp-log-item' },
-                  h('div', null,
-                    h('span', { className: 'dsp-badge' }, `${e.action ?? '?'} / ${e.decision ?? '?'}`),
-                    ' ',
-                    h('span', { className: 'dsp-card-hint', style: { margin: 0 } }, humanTime(e.ts)),
-                    e.conversationName ? `  ${e.conversationName}` : '',
-                  ),
-                  e.conversationId
-                    ? h('div', { className: 'dsp-mono', style: { marginTop: 2 } }, e.conversationId)
-                    : null,
-                  e.triggerText ? h('div', { style: { marginTop: 2 } }, `触发：${e.triggerText}`) : null,
-                  e.mention && e.mention.mode && e.mention.mode !== 'none'
-                    ? h('div', { style: { marginTop: 2 } }, `@：${e.mention.name || '?'}（${e.mention.mode}${e.mention.confidence ? ` / ${e.mention.confidence}` : ''}）— ${e.mention.reason ?? ''}`)
-                    : null,
-                  // 附件处理结果：排查「模型为什么没读到某个文件」时这是唯一线索
-                  Array.isArray(e.attachments) && e.attachments.length > 0
-                    ? h('div', { style: { marginTop: 4 } },
-                        h('div', { className: 'dsp-card-hint', style: { margin: 0 } }, `附件（${e.attachmentSummary || ''}）：`),
-                        ...e.attachments.map((a, ai) => {
-                          // 三种结果要看得出来：读到正文 / 图片交给模型看 / 没读到
-                          const icon = a.status === 'ok' ? '✔' : a.status === 'image' ? '🖼' : a.status === 'error' ? '✖' : 'ℹ';
-                          const what = a.status === 'ok'
-                            ? `提取 ${a.chars} 字`
-                            : a.status === 'image'
-                              ? '图片已交给模型查看'
-                              : '未提取内容';
-                          return h('div', {
-                            key: ai,
-                            className: 'dsp-card-hint',
-                            style: { margin: '2px 0 0 12px' },
-                          }, `${icon} ${a.name}｜${(a.size / 1024).toFixed(1)}KB｜${what}${a.fromCache ? '｜缓存命中' : ''}${a.note ? `｜${a.note}` : ''}`);
-                        }),
-                      )
-                    : null,
-                  e.error ? h('div', { style: { marginTop: 2, color: 'var(--dsw-alias-danger, #d64545)' } }, `错误：${e.error}`) : null,
-                  e.note ? h('div', { className: 'dsp-card-hint', style: { margin: '2px 0 0 0' } }, e.note) : null,
-                  e.text ? h('pre', { className: 'dsp-pre', style: { marginTop: 6, opacity: .85 } }, e.text.slice(0, 500)) : null,
-                )),
-              ),
         ),
 
         // ── 保存提示 / 错误 ───────────────────────────────────

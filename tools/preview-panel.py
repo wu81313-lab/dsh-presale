@@ -120,6 +120,27 @@ SWITCH_CARD_HOVER = SWITCH_CARD.replace(
     1,
 )
 
+# 「高级设置」折叠组（与 client.js 的 Group 组件一致）。
+GROUP_SAMPLE = """
+<details class="dsp-group">
+  <summary>
+    <span class="dsp-group-label">高级设置</span>
+    <span class="dsp-group-sum">deepseek-flash · 轮询 30s · 读附件 · 日志 12 条</span>
+  </summary>
+  <div class="dsp-group-body">
+    <section class="dsp-card">
+      <h3 class="dsp-card-title">轮询与性能</h3>
+      <div class="dsp-row"><div class="dsp-label">轮询间隔（秒）</div><input class="dsp-input" value="30"></div>
+    </section>
+    <section class="dsp-card">
+      <h3 class="dsp-card-title">模型</h3>
+      <div class="dsp-row"><div class="dsp-label">provider</div><input class="dsp-input" value="deepseek-account"></div>
+      <div class="dsp-row"><div class="dsp-label">model</div><input class="dsp-input" value="deepseek-flash"></div>
+    </section>
+  </div>
+</details>
+"""
+
 # 与 client.js 的 Card 组件等价的普通卡片
 CARD_SAMPLE = """
 <section class="dsp-card">
@@ -198,7 +219,11 @@ body { margin: 0; padding: 24px; background: #f1f3f5; }
     <div class="surface"><div class="dsp-root">{STATUS_COLLAPSED}</div></div>
   </div>
   <div class="pane">
-    <h2>④ 运行状态 · 展开（点右侧箭头）</h2>
+    <h2>④ 高级设置 · 折叠组（默认收起）</h2>
+    <div class="surface"><div class="dsp-root">{GROUP_SAMPLE}</div></div>
+  </div>
+  <div class="pane">
+    <h2>⑤ 运行状态 · 展开（点右侧箭头）</h2>
     <div class="surface"><div class="dsp-root">{STATUS_EXPANDED}</div></div>
   </div>
 </body></html>
@@ -232,6 +257,44 @@ body { margin: 0; padding: 24px; background: #f1f3f5; }
         )
         if OUT_PNG.exists():
             print(f"已生成 {OUT_PNG}  （{OUT_PNG.stat().st_size / 1024:.1f} KB）（仅气泡）")
+            return 0
+        print("截图失败")
+        return 1
+
+    # --group：只渲染「高级设置折叠组」那一块（收起 / 展开两态）。
+    # 整页截图是固定视口的，第 4 块以后落在视口下方拍不到，所以单独出一屏。
+    if "--group" in sys.argv:
+        open_group = GROUP_SAMPLE.replace('<details class="dsp-group">',
+                                          '<details class="dsp-group" open>', 1)
+        grp_html = f"""<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8"><title>高级设置折叠组</title>
+<style>{token_fallback}{css}
+.pane .surface {{ padding: 16px; }}
+.dsp-root {{ gap: 16px; }}
+</style></head>
+<body>
+  <div class="pane">
+    <h2>① 收起（默认）—— 主屏只留日常要动的卡</h2>
+    <div class="surface"><div class="dsp-root">{GROUP_SAMPLE}</div></div>
+  </div>
+  <div class="pane">
+    <h2>② 展开后 —— 组内卡片去掉了各自的框，只靠分隔线区分</h2>
+    <div class="surface"><div class="dsp-root">{open_group}</div></div>
+  </div>
+</body></html>
+"""
+        OUT_HTML.write_text(grp_html, encoding="utf-8")
+        if OUT_PNG.exists():
+            OUT_PNG.unlink()
+        uri = "file:///" + str(OUT_HTML).replace("\\", "/").replace(" ", "%20")
+        subprocess.run(
+            [browser, "--headless", "--disable-gpu", "--hide-scrollbars",
+             "--force-device-scale-factor=2", "--window-size=800,760",
+             f"--screenshot={OUT_PNG}", uri],
+            capture_output=True, text=True,
+        )
+        if OUT_PNG.exists():
+            print(f"已生成 {OUT_PNG}  （{OUT_PNG.stat().st_size / 1024:.1f} KB）（仅折叠组）")
             return 0
         print("截图失败")
         return 1
