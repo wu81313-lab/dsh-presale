@@ -60,6 +60,42 @@ STATUS_EXPANDED = """
 </section>
 """
 
+# 「总开关」卡片（与 client.js 渲染结构一致）：开关行 + 底部动作行。
+# 这张卡曾经用「左标签 128px + 右控件 flex:1 1 240px」的两列布局，
+# 放复选框时左右都空、右侧挤成一团，改成开关行后两侧都饱满。
+SWITCH_CARD = """
+<section class="dsp-card">
+  <h3 class="dsp-card-title">总开关</h3>
+  <p class="dsp-card-hint">建议先用「试运行」把文案和 @ 判定调准，确认无误后再关掉试运行让它真发消息。</p>
+  <div class="dsp-togglerow">
+    <div class="dsp-togglerow-text">
+      <div class="dsp-togglerow-label">启用监听</div>
+      <div class="dsp-togglerow-hint">正在轮询钉钉，命中关键词就会执行</div>
+    </div>
+    <label class="dsp-check"><input type="checkbox" checked></label>
+  </div>
+  <div class="dsp-togglerow">
+    <div class="dsp-togglerow-text">
+      <div class="dsp-togglerow-label">试运行 dryRun</div>
+      <div class="dsp-togglerow-hint">一切照常执行（读消息、判销售、组装文案），但只在活动日志里记录「本该发什么」，不会真的发到群里</div>
+    </div>
+    <label class="dsp-check"><input type="checkbox" checked></label>
+  </div>
+  <div class="dsp-actions" style="margin-top:2px">
+    <button class="dsp-btn dsp-btn-primary">保存开关</button>
+    <label class="dsp-switch on" title="点击停止监听">
+      <input type="checkbox" checked>
+      <span class="dsp-switch-track">
+        <span class="dsp-switch-text">On</span>
+        <span class="dsp-switch-thumb"></span>
+      </span>
+      <span class="dsp-switch-caption">监听中</span>
+    </label>
+    <div class="dsp-spacer"></div>
+  </div>
+</section>
+"""
+
 # 与 client.js 的 Card 组件等价的普通卡片
 CARD_SAMPLE = """
 <section class="dsp-card">
@@ -126,15 +162,19 @@ body { margin: 0; padding: 24px; background: #f1f3f5; }
 </style></head>
 <body>
   <div class="pane">
-    <h2>① 运行状态 · 收起（默认）</h2>
+    <h2>① 总开关（开关行排版：文字在左、控件贴右）</h2>
+    <div class="surface"><div class="dsp-root">{SWITCH_CARD}</div></div>
+  </div>
+  <div class="pane">
+    <h2>② 运行状态 · 收起（默认）</h2>
     <div class="surface"><div class="dsp-root">{STATUS_COLLAPSED}</div></div>
   </div>
   <div class="pane">
-    <h2>② 运行状态 · 展开（点右侧箭头）</h2>
+    <h2>③ 运行状态 · 展开（点右侧箭头）</h2>
     <div class="surface"><div class="dsp-root">{STATUS_EXPANDED}</div></div>
   </div>
   <div class="pane">
-    <h2>③ 对照：普通卡片不受影响</h2>
+    <h2>④ 对照：普通卡片不受影响</h2>
     <div class="surface"><div class="dsp-root">{CARD_SAMPLE}</div></div>
   </div>
 </body></html>

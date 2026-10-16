@@ -75,6 +75,9 @@ window.__ModuleLoader__.load({
 .dsp-card { border: 1px solid var(--dsw-alias-border, rgba(128,128,128,.24)); border-radius: 12px; padding: 16px; background: var(--dsw-alias-bg-layer, transparent); }
 .dsp-card-title { font-size: 14px; font-weight: 600; margin: 0 0 4px; color: var(--dsw-alias-text-1, inherit); }
 .dsp-card-hint { font-size: 12px; line-height: 1.6; margin: 0 0 12px; color: var(--dsw-alias-text-3, rgba(128,128,128,.9)); }
+/* 有悬停说明的文字：只把光标变成问号手型，不加下划线
+   （面板里标签很密，多条下划线反而比原来的说明文字更抢眼） */
+.dsp-has-tip { cursor: help; }
 /* 折叠箭头：收起朝下、展开朝上。做成按钮以便键盘可达。 */
 .dsp-caret { display: inline-flex; align-items: center; justify-content: center; flex: none; width: 24px; height: 24px; padding: 0; border: 0; border-radius: 6px; background: 0 0; cursor: pointer; font: inherit; font-size: 13px; line-height: 1; color: var(--dsw-alias-label-secondary, rgba(128,128,128,.9)); transition: transform .16s, background .16s; }
 .dsp-caret:hover { background: var(--dsw-alias-bg-layer-2, rgba(128,128,128,.1)); }
@@ -83,6 +86,14 @@ window.__ModuleLoader__.load({
 .dsp-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .dsp-row + .dsp-row { margin-top: 10px; }
 .dsp-label { font-size: 13px; color: var(--dsw-alias-text-2, inherit); min-width: 128px; }
+/* 开关行：说明在左、控件贴右。行间用 0.5px 分隔线，不再靠大片留白区分。 */
+.dsp-togglerow { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; padding: 12px 0; }
+.dsp-togglerow + .dsp-togglerow { border-top: .5px solid var(--dsw-alias-border-l2, rgba(128,128,128,.16)); }
+.dsp-togglerow-text { flex: 1; min-width: 0; }
+.dsp-togglerow-label { font-size: 13px; font-weight: 500; line-height: 1.5; color: var(--dsw-alias-text-1, inherit); }
+.dsp-togglerow-hint { font-size: 12px; line-height: 1.6; margin-top: 3px; color: var(--dsw-alias-text-3, rgba(128,128,128,.9)); }
+/* 行内的复选框/开关别被拉伸 */
+.dsp-togglerow > .dsp-check, .dsp-togglerow > .dsp-switch { flex: none; margin-top: 1px; }
 .dsp-input, .dsp-textarea, .dsp-select { flex: 1 1 240px; min-width: 0; font: inherit; font-size: 13px; padding: 7px 10px; border-radius: 8px; border: 1px solid var(--dsw-alias-border, rgba(128,128,128,.3)); background: var(--dsw-alias-bg-base, transparent); color: inherit; box-sizing: border-box; }
 .dsp-textarea { min-height: 132px; resize: vertical; line-height: 1.6; font-family: inherit; }
 .dsp-input:focus, .dsp-textarea:focus, .dsp-select:focus { outline: 2px solid var(--dsw-alias-brand, #4b7bec); outline-offset: -1px; }
@@ -109,6 +120,35 @@ window.__ModuleLoader__.load({
 .dsp-actions { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
 .dsp-spacer { flex: 1; }
 .dsp-pre { white-space: pre-wrap; word-break: break-word; font-family: inherit; font-size: 13px; line-height: 1.7; margin: 0; }
+
+/* 启停开关：滑块式。
+   用它而不是按钮，是因为「监听 / 不监听」本来就是开关语义——
+   按钮只说明"点了会做什么"，开关还能同时表达"现在是什么状态"。 */
+.dsp-switch { display: inline-flex; align-items: center; gap: 8px; cursor: pointer; user-select: none; }
+.dsp-switch input { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+.dsp-switch-track { position: relative; flex: none; width: 46px; height: 26px; border-radius: 999px;
+  background: var(--dsw-alias-danger, #d64545); transition: background .18s ease; }
+.dsp-switch-thumb { position: absolute; top: 3px; left: 3px; width: 20px; height: 20px; border-radius: 50%;
+  background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,.28); transition: transform .18s ease; }
+.dsp-switch-text { position: absolute; top: 0; right: 8px; line-height: 26px; font-size: 11px;
+  font-weight: 600; color: #fff; letter-spacing: .3px; pointer-events: none; }
+/* 开：绿色，滑块滑到右，文字挪到左 */
+.dsp-switch.on .dsp-switch-track { background: var(--dsw-alias-success, #2f9e44); }
+.dsp-switch.on .dsp-switch-thumb { transform: translateX(20px); }
+.dsp-switch.on .dsp-switch-text { right: auto; left: 8px; }
+/* 忙碌与禁用：只降透明度，不改配色，避免用户以为状态变了 */
+.dsp-switch.busy { opacity: .55; cursor: default; }
+.dsp-switch-caption { font-size: 13px; color: var(--dsw-alias-text-2, inherit); }
+.dsp-switch-hint { font-size: 12px; color: var(--dsw-alias-text-3, rgba(128,128,128,.9)); }
+
+/* 维护折叠区：默认收起，只占一行 */
+.dsp-maintain { margin-top: 12px; }
+.dsp-maintain > summary { font-size: 12px; color: var(--dsw-alias-text-3, rgba(128,128,128,.9));
+  cursor: pointer; list-style: none; display: flex; align-items: center; gap: 6px; padding: 2px 0; }
+.dsp-maintain > summary:hover { color: var(--dsw-alias-text-2, inherit); }
+.dsp-maintain > summary::-webkit-details-marker { display: none; }
+.dsp-maintain > summary::before { content: '▸'; font-size: 10px; flex: none; }
+.dsp-maintain[open] > summary::before { content: '▾'; }
 `;
 
     let styleElement = null;
@@ -128,10 +168,17 @@ window.__ModuleLoader__.load({
     // ─────────────────────────── 小组件 ───────────────────────────
 
     function Field(props) {
+      // 说明文字不再占版面，改成悬停 label 才显示。
+      //
+      // 原先是常驻一行小字，十几处叠起来整页就显得很吵。信息本身有用，
+      // 所以不是删掉而是收进 tooltip；再用虚线下划线暗示"这里可以看"，
+      // 否则用户根本不知道有说明可看。
       return h('div', { className: 'dsp-row' },
-        h('div', { className: 'dsp-label' }, props.label),
+        h('div', {
+          className: `dsp-label${props.hint ? ' dsp-has-tip' : ''}`,
+          title: props.hint ?? '',
+        }, props.label),
         props.children,
-        props.hint ? h('div', { className: 'dsp-card-hint', style: { flex: '1 1 100%', margin: '2px 0 0 0' } }, props.hint) : null,
       );
     }
 
@@ -153,6 +200,26 @@ window.__ModuleLoader__.load({
       }, '▾');
     }
 
+    /**
+     * 开关行：说明在左、开关在右（客户端原生 `toggleRow` 的做法）。
+     *
+     * 为什么不用 Field 那种「左标签 + 右控件」的两列布局：
+     *   Field 的标签固定 128px、控件 `flex: 1 1 240px`。放输入框很合适，
+     *   但放**复选框/开关**就出事——控件本身只有几十像素宽，被拉到 240px 后
+     *   左边标签占 128px、中间留一大片空白，右边又塞不下说明文字，
+     *   结果「左边内容多、右边内容少」，两边都空。
+     * 开关行把两者合并成一行：文字自然占满左侧，开关贴右。
+     */
+    function ToggleRow(props) {
+      return h('div', { className: 'dsp-togglerow' },
+        h('div', { className: 'dsp-togglerow-text' },
+          h('div', { className: 'dsp-togglerow-label' }, props.label),
+          props.hint ? h('div', { className: 'dsp-togglerow-hint' }, props.hint) : null,
+        ),
+        props.children,
+      );
+    }
+
     function Kv(props) {
       return h('div', { className: 'dsp-kv' },
         h('div', { className: 'dsp-kv-k' }, props.k),
@@ -161,9 +228,12 @@ window.__ModuleLoader__.load({
     }
 
     function Card(props) {
+      // 同 Field：卡片说明也收进标题的悬停提示，让页面只剩标题与控件。
       return h('section', { className: 'dsp-card' },
-        h('h3', { className: 'dsp-card-title' }, props.title),
-        props.hint ? h('p', { className: 'dsp-card-hint' }, props.hint) : null,
+        h('h3', {
+          className: `dsp-card-title${props.hint ? ' dsp-has-tip' : ''}`,
+          title: props.hint ?? '',
+        }, props.title),
         props.children,
       );
     }
@@ -280,6 +350,13 @@ window.__ModuleLoader__.load({
 
       const poller = status.poller ?? {};
       const id = status.identity ?? {};
+
+      // 「是否在监听」= 循环在跑 **且** 总闸开着。
+      //
+      // 为什么要两个条件：poller.tick() 每轮都会检查 settings.enabled，
+      // 为 false 就立即返回——这时 running 可能仍是 true，循环在空转但什么
+      // 都没做。只看 running 会把它误报成"监听中"，用户会以为在干活。
+      const listening = poller.running === true && poller.enabled === true;
       const llmInfo = status.llm ?? {};
       const t = settings.triggers ?? { provide: {}, summarize: {} };
 
@@ -334,19 +411,29 @@ window.__ModuleLoader__.load({
           title: '总开关',
           hint: '建议先用「试运行」把文案和 @ 判定调准，确认无误后再关掉试运行让它真发消息。',
         },
-          h(Field, { label: '启用监听' },
+          // 两个开关都用行式布局：文字占满左侧，复选框贴右。
+          // 这样左右都饱满，不再是一列 128px 标签 + 一列挤在右边的控件。
+          h(ToggleRow, {
+            label: '启用监听',
+            hint: settings.enabled
+              ? '正在轮询钉钉，命中关键词就会执行'
+              : '已关闭：不再轮询钉钉，任何关键词都不会触发',
+          },
             h('label', { className: 'dsp-check' },
               h('input', {
                 type: 'checkbox',
                 checked: settings.enabled === true,
                 onChange: e => edit('enabled', e.target.checked),
               }),
-              settings.enabled ? '开启' : '关闭',
+              // 状态已由上方说明文字讲清，这里不再重复「开启/关闭」
+              '',
             ),
           ),
-          h(Field, {
+          h(ToggleRow, {
             label: '试运行 dryRun',
-            hint: '开启时一切照常执行（读消息、判销售、组装文案），但只在活动日志里记录「本该发什么」，不会真的发到群里。',
+            hint: settings.dryRun
+              ? '一切照常执行（读消息、判销售、组装文案），但只在活动日志里记录「本该发什么」，不会真的发到群里'
+              : '关闭试运行后，命中的文案会真实发送到对应群',
           },
             h('label', { className: 'dsp-check' },
               h('input', {
@@ -354,23 +441,69 @@ window.__ModuleLoader__.load({
                 checked: settings.dryRun === true,
                 onChange: e => edit('dryRun', e.target.checked),
               }),
-              settings.dryRun ? '只记录，不发送' : '真实发送到群',
+              '',
             ),
           ),
-          h('div', { className: 'dsp-actions', style: { marginTop: 14 } },
+          h('div', { className: 'dsp-actions', style: { marginTop: 2 } },
             h('button', { className: 'dsp-btn dsp-btn-primary', disabled: busy === 'save', onClick: () => void save({ enabled: settings.enabled, dryRun: settings.dryRun }) }, '保存开关'),
+            // 启停开关（滑块式）。
+            //
+            // 状态读自 poller（实际运行状态），不是读 settings 草稿——
+            // 否则改了勾选框还没保存时，开关会显示成另一个状态，跟实际不符。
+            h('label', {
+              className: `dsp-switch${listening ? ' on' : ''}${busy !== '' ? ' busy' : ''}`,
+              title: listening ? '点击停止监听' : '点击开始监听',
+            },
+              h('input', {
+                type: 'checkbox',
+                checked: listening,
+                disabled: busy !== '',
+                onChange: () => void act(listening ? 'stop' : 'start', listening ? '/stop' : '/start'),
+              }),
+              h('span', { className: 'dsp-switch-track' },
+                // 开关内显示 On/Off（与滑块同一视觉层）；忙碌时用省略号代替，
+                // 避免"点了没反应"的错觉
+                h('span', { className: 'dsp-switch-text' },
+                  busy === 'start' || busy === 'stop' ? '…' : (listening ? 'On' : 'Off')),
+                h('span', { className: 'dsp-switch-thumb' }),
+              ),
+              h('span', { className: 'dsp-switch-caption' },
+                busy === 'start' ? '启动中…'
+                  : busy === 'stop' ? '停止中…'
+                  : (listening ? '监听中' : '已停止')),
+            ),
+            h('div', { className: 'dsp-spacer' }),
+          ),
+        ),
+
+        // ── 维护动作（排查用，平时不需要动）──────────────────
+        //
+        // 这三个都是排查用的：日常监听不需要动它们，但删掉会真的丢掉能力
+        // （尤其「立即检查」——退避期最长 5 分钟，想验证配置时得靠它）。
+        // 从「总开关」里挪出来单独成块：原来挤在开关行的按钮后面，
+        // 又用 <details> 折了一次，等于"卡片里再套一层折叠"，不好找。
+        h(Card, { title: '维护' },
+          h('p', { className: 'dsp-card-hint' }, '排查用，平时不需要动。'),
+          h('div', { className: 'dsp-actions', style: { marginTop: 2 } },
             h('button', {
               className: 'dsp-btn',
               disabled: busy !== '',
-              onClick: () => void act('start', '/start'),
-            }, '开始监听'),
-            h('button', { className: 'dsp-btn', disabled: busy !== '', onClick: () => void act('stop', '/stop') }, '停止监听'),
-            h('div', { className: 'dsp-spacer' }),
-            h('button', { className: 'dsp-btn', disabled: busy !== '', onClick: () => void act('check', '/check-now') }, busy === 'check' ? '检查中…' : '立即检查一次'),
-            h('button', { className: 'dsp-btn', disabled: busy !== '', onClick: () => void act('seed', '/seed-now') }, '把水位重置为现在'),
-            h('button', { className: 'dsp-btn', disabled: busy !== '', onClick: () => void act('id', '/reidentify') }, '重新识别身份'),
+              title: '不等下一个轮询周期，立刻跑一轮搜索',
+              onClick: () => void act('check', '/check-now'),
+            }, busy === 'check' ? '检查中…' : '立即检查一次'),
+              h('button', {
+                className: 'dsp-btn',
+                disabled: busy !== '',
+                title: '把搜索起点推到此刻，之前的历史消息一律不再处理',
+                onClick: () => void act('seed', '/seed-now'),
+              }, '把水位重置为现在'),
+              h('button', {
+                className: 'dsp-btn',
+                disabled: busy !== '',
+                onClick: () => void act('id', '/reidentify'),
+              }, '重新识别身份'),
+            ),
           ),
-        ),
 
         // ── 动作一 ────────────────────────────────────────────
         h(Card, {
