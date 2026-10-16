@@ -109,6 +109,16 @@ window.__ModuleLoader__.load({
 .dsp-actions { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
 .dsp-spacer { flex: 1; }
 .dsp-pre { white-space: pre-wrap; word-break: break-word; font-family: inherit; font-size: 13px; line-height: 1.7; margin: 0; }
+/* 维护折叠区：默认收起，只占一行。
+   三个维护动作（立即检查 / 重置水位 / 重新识别身份）都是排查用的，
+   平铺在按钮行里会把日常操作挤在一起，所以折起来。 */
+.dsp-maintain { margin-top: 12px; }
+.dsp-maintain > summary { font-size: 12px; color: var(--dsw-alias-text-3, rgba(128,128,128,.9));
+  cursor: pointer; list-style: none; display: flex; align-items: center; gap: 6px; padding: 2px 0; }
+.dsp-maintain > summary:hover { color: var(--dsw-alias-text-2, inherit); }
+.dsp-maintain > summary::-webkit-details-marker { display: none; }
+.dsp-maintain > summary::before { content: '▸'; font-size: 10px; }
+.dsp-maintain[open] > summary::before { content: '▾'; }
 `;
 
     let styleElement = null;
@@ -366,9 +376,33 @@ window.__ModuleLoader__.load({
             }, '开始监听'),
             h('button', { className: 'dsp-btn', disabled: busy !== '', onClick: () => void act('stop', '/stop') }, '停止监听'),
             h('div', { className: 'dsp-spacer' }),
-            h('button', { className: 'dsp-btn', disabled: busy !== '', onClick: () => void act('check', '/check-now') }, busy === 'check' ? '检查中…' : '立即检查一次'),
-            h('button', { className: 'dsp-btn', disabled: busy !== '', onClick: () => void act('seed', '/seed-now') }, '把水位重置为现在'),
-            h('button', { className: 'dsp-btn', disabled: busy !== '', onClick: () => void act('id', '/reidentify') }, '重新识别身份'),
+          ),
+          // 维护动作收进折叠区。
+          //
+          // 这三个都是排查用的：日常监听不需要动它们，但删掉会真的丢掉能力
+          // （尤其「立即检查」——退避期最长 5 分钟，想验证配置时得靠它）。
+          // 平铺在按钮行里会把上面三个日常按钮挤在一起，所以折起来。
+          h('details', { className: 'dsp-maintain' },
+            h('summary', null, '维护（排查用，平时不需要动）'),
+            h('div', { className: 'dsp-actions', style: { marginTop: 10 } },
+              h('button', {
+                className: 'dsp-btn',
+                disabled: busy !== '',
+                title: '不等下一个轮询周期，立刻跑一轮搜索',
+                onClick: () => void act('check', '/check-now'),
+              }, busy === 'check' ? '检查中…' : '立即检查一次'),
+              h('button', {
+                className: 'dsp-btn',
+                disabled: busy !== '',
+                title: '把搜索起点推到此刻，之前的历史消息一律不再处理',
+                onClick: () => void act('seed', '/seed-now'),
+              }, '把水位重置为现在'),
+              h('button', {
+                className: 'dsp-btn',
+                disabled: busy !== '',
+                onClick: () => void act('id', '/reidentify'),
+              }, '重新识别身份'),
+            ),
           ),
         ),
 
