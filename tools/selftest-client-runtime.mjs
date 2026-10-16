@@ -258,25 +258,25 @@ console.log(`✔ 稳定后渲染出 ${texts.length} 段文本`);
 console.log(`  fetch 端点：${[...new Set(fetchCalls.map(u => u.replace(/^.*presale-api/, '').split('?')[0]))].join(', ')}`);
 
 // 面板应当渲染出这些关键文案
-const mustHave = ['运行状态', '总开关', '动作一', '动作二', '保存动作一', '保存动作二'];
+const mustHave = ['运行状态', '总开关', '功能一', '功能二', '保存功能一', '保存功能二'];
 for (const key of mustHave) {
   if (!joined.includes(key)) problems.push(`渲染结果里找不到「${key}」——面板可能没渲染完整`);
 }
 
 // ── 回归断言 ────────────────────────────────────────────────
-// ① @ 销售人员必须并入「动作一」，不能再是独立卡片。
-//    判断依据：它出现在「动作一」标题与「动作二」标题之间，且不再有独立的
+// ① @ 销售人员必须并入「功能一」，不能再是独立卡片。
+//    判断依据：它出现在「功能一」标题与「功能二」标题之间，且不再有独立的
 //    卡片标题结构。这里用渲染树里的顺序做检查。
-const iAction1 = joined.indexOf('动作一');
+const iAction1 = joined.indexOf('功能一');
 const iMention = joined.indexOf('@ 销售人员');
-const iAction2 = joined.indexOf('动作二');
+const iAction2 = joined.indexOf('功能二');
 if (iMention < 0) {
-  problems.push('找不到「@ 销售人员」——它应当并入动作一卡片内');
+  problems.push('找不到「@ 销售人员」——它应当并入功能一卡片内');
 } else if (!(iAction1 < iMention && iMention < iAction2)) {
-  problems.push('「@ 销售人员」不在「动作一」与「动作二」之间——可能又变回独立卡片了');
+  problems.push('「@ 销售人员」不在「功能一」与「功能二」之间——可能又变回独立卡片了');
 }
 if (joined.includes('保存 @ 设置')) {
-  problems.push('还存在独立的「保存 @ 设置」按钮——@ 策略应当与动作一合并保存');
+  problems.push('还存在独立的「保存 @ 设置」按钮——@ 策略应当与功能一合并保存');
 }
 
 // ② 悬停提示不能同时挂原生 title 属性，否则浏览器会弹出第二个气泡。

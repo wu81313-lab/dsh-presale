@@ -65,7 +65,7 @@ try {
   const rendered = renderHistoryForModel(history.messages, identity.status(), 24000);
   check('历史可渲染为模型输入', rendered.text.length > 0, `${rendered.text.length} 字，丢弃 ${rendered.dropped} 条`);
   const bigHistory = await conversationData.history({ conversationId: GROUP, count: 200 });
-  check('大窗口历史可读（动作二默认 200 条）', bigHistory.ok, `${bigHistory.messages.length} 条`);
+  check('大窗口历史可读（功能二默认 200 条）', bigHistory.ok, `${bigHistory.messages.length} 条`);
 
   console.log('\n== 4. 组装带 @ 的正文 ==');
   const target = withOid.find(m => m.name === TARGET_NAME) ?? withOid[0];

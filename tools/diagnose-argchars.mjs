@@ -57,8 +57,8 @@ function findRejectedChar(text, label) {
 console.log('== 设置里的文案来源 ==');
 console.log(`  文件：${settingsPath}`);
 
-findRejectedChar(settings.triggers?.provide?.template ?? '', '动作一 · 文案模板');
-findRejectedChar(settings.triggers?.summarize?.prompt ?? '', '动作二 · 总结提示词');
+findRejectedChar(settings.triggers?.provide?.template ?? '', '功能一 · 文案模板');
+findRejectedChar(settings.triggers?.summarize?.prompt ?? '', '功能二 · 总结提示词');
 findRejectedChar(settings.triggers?.provide?.salesPrompt ?? '', '销售判别提示词');
 
 console.log('\n== 结论 ==');
