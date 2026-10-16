@@ -120,6 +120,28 @@ SWITCH_CARD_HOVER = SWITCH_CARD.replace(
     1,
 )
 
+# 「@ 销售人员」分两层：常用开关常显，判定策略折在 details 里。
+MENTION_SAMPLE = """
+<div class="dsp-card">
+  <div class="dsp-subhead" style="margin-top:0;padding-top:0;border-top:0">@ 销售人员</div>
+  <div class="dsp-row">
+    <div class="dsp-label">启用 @</div>
+    <label class="dsp-check"><input type="checkbox" checked> 开启</label>
+  </div>
+  <details class="dsp-maintain">
+    <summary>@ 判定策略（当前：置信度 high）</summary>
+    <div style="margin-top:4px">
+      <div class="dsp-row"><div class="dsp-label">最低置信度</div>
+        <select class="dsp-select"><option>high（最保守，推荐）</option></select></div>
+      <div class="dsp-row"><div class="dsp-label">中等置信度降级为文本提及</div>
+        <label class="dsp-check"><input type="checkbox"> 关闭：干脆不 @</label></div>
+      <div class="dsp-row"><div class="dsp-label">判不出时 @ 你自己</div>
+        <label class="dsp-check"><input type="checkbox"> 关闭（推荐）</label></div>
+    </div>
+  </details>
+</div>
+"""
+
 # 「高级设置」折叠组（与 client.js 的 Group 组件一致）。
 GROUP_SAMPLE = """
 <details class="dsp-group">
@@ -223,7 +245,11 @@ body { margin: 0; padding: 24px; background: #f1f3f5; }
     <div class="surface"><div class="dsp-root">{GROUP_SAMPLE}</div></div>
   </div>
   <div class="pane">
-    <h2>⑤ 运行状态 · 展开（点右侧箭头）</h2>
+    <h2>⑤ @ 销售人员 · 只留「启用 @」，判定策略折起来</h2>
+    <div class="surface"><div class="dsp-root">{MENTION_SAMPLE}</div></div>
+  </div>
+  <div class="pane">
+    <h2>⑥ 运行状态 · 展开（点右侧箭头）</h2>
     <div class="surface"><div class="dsp-root">{STATUS_EXPANDED}</div></div>
   </div>
 </body></html>
@@ -295,6 +321,43 @@ body { margin: 0; padding: 24px; background: #f1f3f5; }
         )
         if OUT_PNG.exists():
             print(f"已生成 {OUT_PNG}  （{OUT_PNG.stat().st_size / 1024:.1f} KB）（仅折叠组）")
+            return 0
+        print("截图失败")
+        return 1
+
+    # --mention：只渲染「@ 销售人员」那一块（收起 / 展开两态）。
+    if "--mention" in sys.argv:
+        open_mention = MENTION_SAMPLE.replace('<details class="dsp-maintain">',
+                                              '<details class="dsp-maintain" open>', 1)
+        men_html = f"""<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8"><title>@ 销售人员</title>
+<style>{token_fallback}{css}
+.pane .surface {{ padding: 16px; }}
+.dsp-root {{ gap: 16px; }}
+</style></head>
+<body>
+  <div class="pane">
+    <h2>① 收起（默认）—— 只留「启用 @」</h2>
+    <div class="surface"><div class="dsp-root">{MENTION_SAMPLE}</div></div>
+  </div>
+  <div class="pane">
+    <h2>② 展开后 —— 判定策略四项</h2>
+    <div class="surface"><div class="dsp-root">{open_mention}</div></div>
+  </div>
+</body></html>
+"""
+        OUT_HTML.write_text(men_html, encoding="utf-8")
+        if OUT_PNG.exists():
+            OUT_PNG.unlink()
+        uri = "file:///" + str(OUT_HTML).replace("\\", "/").replace(" ", "%20")
+        subprocess.run(
+            [browser, "--headless", "--disable-gpu", "--hide-scrollbars",
+             "--force-device-scale-factor=2", "--window-size=800,620",
+             f"--screenshot={OUT_PNG}", uri],
+            capture_output=True, text=True,
+        )
+        if OUT_PNG.exists():
+            print(f"已生成 {OUT_PNG}  （{OUT_PNG.stat().st_size / 1024:.1f} KB）（仅 @ 销售人员）")
             return 0
         print("截图失败")
         return 1

@@ -700,6 +700,12 @@ window.__ModuleLoader__.load({
           // 这块原先是**独立一张卡**，但它只服务于动作一（动作一才 @ 人，
           // 动作二的总结不 @ 任何人是设计如此）。单独成卡会让人以为它是
           // 全局设置，进而怀疑"动作二是不是也会 @ 人"。归到动作一里。
+          //
+          // 再往下细分两层：
+          //   常显   「启用 @」——决定要不要 @ 人，是开关级别的决定；
+          //   折叠   置信度门槛 / 降级策略 / 判别提示词——都是"怎么 @ 更准"
+          //          的细化调参，调好一次基本不再动。
+          // 之前这几项平铺着，一屏全是 @ 的细节，把动作一本身淹没了。
           h('div', { className: 'dsp-subhead' }, '@ 销售人员'),
           h(Field, { label: '启用 @' },
             h('label', { className: 'dsp-check' },
@@ -711,49 +717,54 @@ window.__ModuleLoader__.load({
               settings.mention.enabled ? '开启' : '关闭（只发文案，不 @ 人）',
             ),
           ),
-          h(Field, {
-            label: '最低置信度',
-            hint: '只有达到这个置信度才会真正 @ 人。达不到时：medium 会在正文里写成纯文本「@姓名」（不触发提醒），low 直接不 @。群里 @ 错人比不 @ 更尴尬，所以默认要求 high。',
-          },
-            h('select', {
-              className: 'dsp-select',
-              value: settings.mention.minConfidence ?? 'high',
-              onChange: e => edit('mention.minConfidence', e.target.value),
-            },
-              h('option', { value: 'high' }, 'high（最保守，推荐）'),
-              h('option', { value: 'medium' }, 'medium（判出就 @）'),
-              h('option', { value: 'low' }, 'low（几乎总会 @）'),
+          h('details', { className: 'dsp-maintain' },
+            h('summary', null, `@ 判定策略（当前：置信度 ${settings.mention.minConfidence ?? 'high'}）`),
+            h('div', { style: { marginTop: 4 } },
+              h(Field, {
+                label: '最低置信度',
+                hint: '只有达到这个置信度才会真正 @ 人。达不到时：medium 会在正文里写成纯文本「@姓名」（不触发提醒），low 直接不 @。群里 @ 错人比不 @ 更尴尬，所以默认要求 high。',
+              },
+                h('select', {
+                  className: 'dsp-select',
+                  value: settings.mention.minConfidence ?? 'high',
+                  onChange: e => edit('mention.minConfidence', e.target.value),
+                },
+                  h('option', { value: 'high' }, 'high（最保守，推荐）'),
+                  h('option', { value: 'medium' }, 'medium（判出就 @）'),
+                  h('option', { value: 'low' }, 'low（几乎总会 @）'),
+                ),
+              ),
+              h(Field, { label: '中等置信度降级为文本提及' },
+                h('label', { className: 'dsp-check' },
+                  h('input', {
+                    type: 'checkbox',
+                    checked: settings.mention.textualMentionWhenMedium === true,
+                    onChange: e => edit('mention.textualMentionWhenMedium', e.target.checked),
+                  }),
+                  settings.mention.textualMentionWhenMedium ? '开启：正文写「@姓名」但不提醒' : '关闭：干脆不 @',
+                ),
+              ),
+              h(Field, { label: '判不出时 @ 你自己' },
+                h('label', { className: 'dsp-check' },
+                  h('input', {
+                    type: 'checkbox',
+                    checked: settings.mention.fallbackToTriggerWhenUnknown === true,
+                    onChange: e => edit('mention.fallbackToTriggerWhenUnknown', e.target.checked),
+                  }),
+                  settings.mention.fallbackToTriggerWhenUnknown ? '开启' : '关闭（推荐）',
+                ),
+              ),
+              h(Field, {
+                label: '判别提示词',
+                hint: '交给模型判断"谁在把需求和项目信息带进这个群"的提示词。通常是提出需求描述的那个人；模型必须排除你自己（你是在发指令，不是需求提出方）。',
+              },
+                h('textarea', {
+                  className: 'dsp-textarea',
+                  value: t.provide.salesPrompt ?? '',
+                  onChange: e => edit('triggers.provide.salesPrompt', e.target.value),
+                }),
+              ),
             ),
-          ),
-          h(Field, { label: '中等置信度降级为文本提及' },
-            h('label', { className: 'dsp-check' },
-              h('input', {
-                type: 'checkbox',
-                checked: settings.mention.textualMentionWhenMedium === true,
-                onChange: e => edit('mention.textualMentionWhenMedium', e.target.checked),
-              }),
-              settings.mention.textualMentionWhenMedium ? '开启：正文写「@姓名」但不提醒' : '关闭：干脆不 @',
-            ),
-          ),
-          h(Field, { label: '判不出时 @ 你自己' },
-            h('label', { className: 'dsp-check' },
-              h('input', {
-                type: 'checkbox',
-                checked: settings.mention.fallbackToTriggerWhenUnknown === true,
-                onChange: e => edit('mention.fallbackToTriggerWhenUnknown', e.target.checked),
-              }),
-              settings.mention.fallbackToTriggerWhenUnknown ? '开启' : '关闭（推荐）',
-            ),
-          ),
-          h(Field, {
-            label: '判别提示词',
-            hint: '交给模型判断"谁在把需求和项目信息带进这个群"的提示词。通常是提出需求描述的那个人；模型必须排除你自己（你是在发指令，不是需求提出方）。',
-          },
-            h('textarea', {
-              className: 'dsp-textarea',
-              value: t.provide.salesPrompt ?? '',
-              onChange: e => edit('triggers.provide.salesPrompt', e.target.value),
-            }),
           ),
           // 一个按钮保存整块动作一：触发设置 + @ 策略。
           // 原来分成「保存动作一」和「保存 @ 设置」两个按钮，用户得记住
