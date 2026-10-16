@@ -123,6 +123,11 @@ window.__ModuleLoader__.load({
 .dsp-subhead { margin-top: 20px; padding-top: 14px;
   border-top: .5px solid var(--dsw-alias-border-l2, rgba(128,128,128,.16));
   font-size: 13px; font-weight: 600; color: var(--dsw-alias-text-1, inherit); }
+/* 分节标题带开关时改为一行：标题在左、开关贴右。
+   这样"是否启用"与它作用的标题在同一行，不必再起一个「启用 xx」的标签行——
+   那行标签只重复了标题已经说过的信息。 */
+.dsp-subhead-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.dsp-subhead-row > .dsp-check { font-weight: 400; }
 
 /* ── 折叠组（「高级设置」）─────────────────────────────────
    把不常用的几张卡收在一起，主屏只留日常要动的那几张。
@@ -730,19 +735,22 @@ window.__ModuleLoader__.load({
           // 全局设置，进而怀疑"功能二是不是也会 @ 人"。归到功能一里。
           //
           // 再往下细分两层：
-          //   常显   「启用 @」——决定要不要 @ 人，是开关级别的决定；
+          //   常显   一行「@ 销售人员 ☑」——开关直接跟在标题后，
+          //          不再单独占一个「启用 @」标签行（那行只是重复标题）；
           //   折叠   置信度门槛 / 降级策略 / 判别提示词——都是"怎么 @ 更准"
           //          的细化调参，调好一次基本不再动。
           // 之前这几项平铺着，一屏全是 @ 的细节，把功能一本身淹没了。
-          h('div', { className: 'dsp-subhead' }, '@ 销售人员'),
-          h(Field, { label: '启用 @' },
-            h('label', { className: 'dsp-check' },
+          h('div', { className: 'dsp-subhead dsp-subhead-row' },
+            h('span', null, '@ 销售人员'),
+            h('label', { className: 'dsp-check', title: '关闭后只发文案，不 @ 任何人' },
               h('input', {
                 type: 'checkbox',
                 checked: settings.mention.enabled === true,
                 onChange: e => edit('mention.enabled', e.target.checked),
               }),
-              settings.mention.enabled ? '开启' : '关闭（只发文案，不 @ 人）',
+              // 只标"开"这一个状态：关掉时这行只剩「@ 销售人员 ☐」，
+              // 已经足够清楚，再写「关闭」是重复。
+              settings.mention.enabled ? '开启' : '',
             ),
           ),
           h('details', { className: 'dsp-maintain' },

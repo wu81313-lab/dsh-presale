@@ -124,13 +124,12 @@ SWITCH_CARD_HOVER = SWITCH_CARD.replace(
     1,
 )
 
-# 「@ 销售人员」分两层：常用开关常显，判定策略折在 details 里。
+# 「@ 销售人员」分两层：一行「标题 + 开关」常显，判定策略折在 details 里。
 MENTION_SAMPLE = """
 <div class="dsp-card">
-  <div class="dsp-subhead" style="margin-top:0;padding-top:0;border-top:0">@ 销售人员</div>
-  <div class="dsp-row">
-    <div class="dsp-label">启用 @</div>
-    <label class="dsp-check"><input type="checkbox" checked> 开启</label>
+  <div class="dsp-subhead dsp-subhead-row" style="margin-top:0;padding-top:0;border-top:0">
+    <span>@ 销售人员</span>
+    <label class="dsp-check" title="关闭后只发文案，不 @ 任何人"><input type="checkbox" checked> 开启</label>
   </div>
   <details class="dsp-maintain">
     <summary>@ 判定策略（当前：置信度 high）</summary>
@@ -249,7 +248,7 @@ body { margin: 0; padding: 24px; background: #f1f3f5; }
     <div class="surface"><div class="dsp-root">{GROUP_SAMPLE}</div></div>
   </div>
   <div class="pane">
-    <h2>⑤ @ 销售人员 · 只留「启用 @」，判定策略折起来</h2>
+    <h2>⑤ @ 销售人员 · 开关跟在标题后，判定策略折起来</h2>
     <div class="surface"><div class="dsp-root">{MENTION_SAMPLE}</div></div>
   </div>
   <div class="pane">
@@ -376,7 +375,7 @@ body { margin: 0; padding: 24px; background: #f1f3f5; }
 </style></head>
 <body>
   <div class="pane">
-    <h2>① 收起（默认）—— 只留「启用 @」</h2>
+    <h2>① 收起（默认）—— 开关直接跟在标题后</h2>
     <div class="surface"><div class="dsp-root">{MENTION_SAMPLE}</div></div>
   </div>
   <div class="pane">
