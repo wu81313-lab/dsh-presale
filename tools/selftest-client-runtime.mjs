@@ -374,6 +374,31 @@ if (footCall !== undefined && typeof footCall[1] === 'function') {
     } else {
       console.log(`✔ 侧边栏入口只画图标（文字节点：${JSON.stringify(footJoined)}），文字交给外壳`);
     }
+
+    // 图标必须是 SVG，不能是文字符号。
+    // 之前用的是「◈」这个字符——和旁边那排线性图标摆在一起非常扎眼，
+    // 用户直接反馈"图标太丑"。这里锁住"必须是 svg 元素"，且规格与内置一致。
+    const svgNodes = [];
+    (function walkSvg(node) {
+      if (node === null || node === undefined || node === false) return;
+      if (Array.isArray(node)) { node.forEach(walkSvg); return; }
+      if (typeof node === 'object') {
+        if (node.type === 'svg') svgNodes.push(node.props ?? {});
+        walkSvg(node.children);
+      }
+    })(footTree);
+    if (svgNodes.length === 0) {
+      problems.push('侧边栏入口没有渲染出 SVG 图标——不要用文字符号当图标');
+    } else {
+      const p = svgNodes[0];
+      const okBox = p.viewBox === '0 0 24 24';
+      const okStroke = p.stroke === 'currentColor';
+      const okWidth = p.width === 16 && p.height === 16;
+      if (!okBox) problems.push(`图标 viewBox 不是 24×24（实际 ${p.viewBox}）——与内置图标规格不一致`);
+      if (!okStroke) problems.push('图标描边不是 currentColor——深浅主题不会跟随');
+      if (!okWidth) problems.push(`图标尺寸不是 16×16（实际 ${p.width}×${p.height}）`);
+      if (okBox && okStroke && okWidth) console.log('✔ 图标是 SVG（24×24 viewBox / currentColor / 16px）');
+    }
   } catch (error) {
     problems.push('渲染侧边栏入口时抛错：' + (error && error.message ? error.message : error));
   }

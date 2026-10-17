@@ -242,7 +242,7 @@ window.__ModuleLoader__.load({
 .dsp-foot:hover { color: var(--dsw-alias-text-1, inherit); }
 .dsp-foot[data-active='true'] { color: var(--dsw-alias-brand, currentColor); }
 .dsp-foot-icon { display: inline-flex; align-items: center; justify-content: center;
-  width: 16px; height: 16px; font-size: 13px; line-height: 1; opacity: .85; }
+  width: 16px; height: 16px; opacity: .85; }
 `;
 
     let styleElement = null;
@@ -1204,6 +1204,50 @@ window.__ModuleLoader__.load({
       );
     }
 
+    // ─────────────────────── 图标 ───────────────────────
+
+    /**
+     * 线性 SVG 外壳。
+     *
+     * 参数抄自 dsh-local-kb（同一宿主、同一插槽，实测能对齐内置图标）：
+     * viewBox 24×24、描边 1.6、圆头圆角、颜色取 currentColor，
+     * 这样深浅主题自动跟随，不用为两套主题各写一份。
+     */
+    function Icon(props) {
+      const size = props?.size ?? 16;
+      return h('svg', {
+        width: size,
+        height: size,
+        viewBox: '0 0 24 24',
+        fill: 'none',
+        stroke: 'currentColor',
+        strokeWidth: 1.6,
+        strokeLinecap: 'round',
+        strokeLinejoin: 'round',
+        'aria-hidden': 'true',
+        style: { flex: 'none', display: 'block' },
+      }, props?.children);
+    }
+
+    /**
+     * 售前助手图标：对话气泡 + 一个勾。
+     *
+     * 为什么是这两个元素：
+     *   · 气泡 = 钉钉群里的聊天（这个插件的输入）；
+     *   · 勾   = 已经整理完的需求（这个插件的产出）。
+     * 合起来正好是这个插件在做的事：把群里的聊天和文件，整理成一份需求。
+     *
+     * 为什么用勾而不是两条文本线：16px 下两根细线的间距只有一个像素多，
+     * 会糊成一条灰杠；单个勾的转折更明显，缩到 16px 仍然认得出。
+     *
+     * 尾巴放在左下：气泡尾是「这是聊天」最省事的信号，一个三角形就够。
+     */
+    function IconPresale(props) {
+      return h(Icon, props,
+        h('path', { d: 'M20.5 13.4a2 2 0 0 1-2 2H11l-4.5 3.2v-3.2H5.5a2 2 0 0 1-2-2v-6a2 2 0 0 1 2-2h13a2 2 0 0 1 2 2v6Z' }),
+        h('path', { d: 'M8.6 9.6l2 2 4-4' }));
+    }
+
     // ─────────────────────── 侧边栏入口按钮 ───────────────────────
 
     /** 切到售前助手主面板。layout 服务拿不到时只告警，不抛。 */
@@ -1236,7 +1280,10 @@ window.__ModuleLoader__.load({
         'aria-current': props?.active === true ? 'page' : undefined,
         onClick: () => openPresalePanel(props?.__presaleCtx),
       },
-        h('span', { className: 'dsp-foot-icon', 'aria-hidden': 'true' }, '◈'));
+        // 尺寸跟内置图标一致（16px）。原先这里是文字符号「◈」，
+        // 和旁边那排线性图标放在一起显得很扎眼。
+        h('span', { className: 'dsp-foot-icon', 'aria-hidden': 'true' },
+          h(IconPresale, { size: 16 })));
     }
 
     /**
