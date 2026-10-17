@@ -178,6 +178,14 @@ check('注入了样式（跟随主题令牌）', styleTags.length === 1, `实际
 if (styleTags.length === 1) {
   check('样式只用 DSH 设计令牌，不写死颜色', styleTags[0].textContent.includes('--dsw-'), '未发现 --dsw- 令牌');
   check('样式作用域带 dsp- 前缀（不污染宿主）', styleTags[0].textContent.includes('.dsp-'));
+
+  // 滚动：main 插槽只给定高容器，**不会**替面板加滚动条。
+  // 原来挂在设置弹窗时由弹窗外壳滚动，迁到 main 后必须自己撑滚动区，
+  // 否则 11 张卡的下半截永远看不到（用户实测报告过「无法上下滑动」）。
+  const rootRule = (styleTags[0].textContent.match(/\.dsp-root\s*\{[^}]*\}/) ?? [''])[0];
+  check('面板根容器自己可滚动（overflow-y: auto）', rootRule.includes('overflow-y: auto'), rootRule.slice(0, 120));
+  check('面板根容器撑满高度（height: 100%）', rootRule.includes('height: 100%'), rootRule.slice(0, 120));
+  check('面板根容器的 padding 不会被撑破（box-sizing: border-box）', rootRule.includes('box-sizing: border-box'), rootRule.slice(0, 120));
 }
 
 // ── 渲染一次面板（不装 React，只验证组件能被调用不抛错）───────

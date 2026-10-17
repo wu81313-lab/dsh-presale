@@ -79,7 +79,16 @@ window.__ModuleLoader__.load({
     // 只用 DSH 的设计令牌，因此深浅主题自动跟随；令牌缺失时每条规则都有中性兜底值。
 
     const CSS = `
-.dsp-root { display: flex; flex-direction: column; gap: 18px; padding: 4px 2px 24px; }
+/* 根容器必须自己撑出滚动区。
+   main 插槽只给一个定高的容器，**不会**替面板加滚动条——原来挂在设置弹窗里
+   时由弹窗外壳负责滚动，所以这里没写；迁到 main 之后就滚不动了。
+   height:100% + overflow-y:auto 是 dsh-local-kb 在同一个插槽验证过的做法。 */
+.dsp-root { display: flex; flex-direction: column; gap: 18px;
+  box-sizing: border-box; height: 100%; overflow-y: auto;
+  padding: 22px 24px 36px; align-items: stretch; }
+.dsp-root::-webkit-scrollbar { width: 8px; }
+.dsp-root::-webkit-scrollbar-thumb { background: var(--dsw-alias-scrollbar-bg-l2, rgba(128,128,128,.3)); border-radius: 99px; }
+.dsp-root::-webkit-scrollbar-track { background: transparent; }
 .dsp-card { border: 1px solid var(--dsw-alias-border, rgba(128,128,128,.24)); border-radius: 12px; padding: 16px; background: var(--dsw-alias-bg-layer, transparent); }
 .dsp-card-title { font-size: 14px; font-weight: 600; margin: 0 0 4px; color: var(--dsw-alias-text-1, inherit); }
 /* 标题行带右侧操作位时改为 flex：标题占满、操作贴右，
