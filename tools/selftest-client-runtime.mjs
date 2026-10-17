@@ -237,8 +237,13 @@ try { mod.apply(ctx); } catch (error) {
   console.log('✖ apply(ctx) 抛错：\n' + (error && error.stack)); process.exit(1);
 }
 if (slotCalls.length === 0) { console.log('✖ 没有 slots.register'); process.exit(1); }
-const [options, component] = slotCalls[0];
-console.log(`✔ slots.register id=${options.id}，组件是第 2 参数：${typeof component === 'function' ? '是' : '否（会白屏）'}`);
+
+// 面板本体挂在 main 插槽（整块设置模块已迁过去）。
+// slotCalls[0] 现在是侧边栏入口，只画一个图标，不能拿它当面板来渲染。
+const mainEntry = slotCalls.find(([o]) => o?.name === 'main');
+if (mainEntry === undefined) { console.log('✖ 没有注册 main 插槽'); process.exit(1); }
+const [options, component] = mainEntry;
+console.log(`✔ main 插槽 key=${options.key}，组件是第 2 参数：${typeof component === 'function' ? '是' : '否（会白屏）'}`);
 if (typeof component !== 'function') process.exit(1);
 
 // ── 渲染（关键：驱动到有数据的状态）──────────────────────
@@ -302,20 +307,26 @@ for (const p of tipTriggers) {
   }
 }
 
-// ③ 三个挂载点都要注册上。
+// ③ 两个挂载点，配套使用。
 //
-// 设置分区是模态窗口，运维要看主页面时不能用它，所以另有一个非模态主面板
-// （main 插槽）和侧边栏入口（sidebar.panellist）。这两个是新加的，
+// sidebar.panellist = 顶部入口（只画图标，文字由外壳渲染）
+// main             = 该入口对应的中央页面（完整设置模块）
+//
 // 注册失败时页面一切正常、只有点开才白屏——必须在这里提前抓住。
+// 另外断言 settings.section **没有**被注册：设置是模态窗口，会锁死主页面，
+// 模块已整体迁到 main 面板；若哪天它又被加回来，这里会直接失败。
 const slotNames = slotCalls.map(([o]) => o?.name);
 console.log(`  已注册插槽：${slotNames.join(', ')}`);
-for (const need of ['settings.section', 'sidebar.panellist', 'main']) {
+for (const need of ['sidebar.panellist', 'main']) {
   if (!slotNames.includes(need)) problems.push(`缺少插槽注册：${need}`);
+}
+if (slotNames.includes('settings.section')) {
+  problems.push('又注册了 settings.section——设置是模态窗口，会锁死主页面，模块已迁至 main');
 }
 
 const mainCall = slotCalls.find(([o]) => o?.name === 'main');
 const footCall = slotCalls.find(([o]) => o?.name === 'sidebar.panellist');
-if (mainCall !== undefined && mainCall[0].key !== mainCall[0].id) {
+if (mainCall !== undefined) {
   // main 是 keyed 插槽，key 必须与侧边栏条目的 id 一致，否则点了切不过去
   const footId = footCall?.[0]?.id;
   if (mainCall[0].key !== footId) {
@@ -326,33 +337,43 @@ if (mainCall !== undefined && mainCall[0].key !== mainCall[0].id) {
 // 渲染主面板：这里一旦抛错，用户点侧边栏就是白屏
 if (mainCall !== undefined && typeof mainCall[1] === 'function') {
   try {
-    let opsTree = renderUntilStable(React.createElement(mainCall[1]));
+    let mainTree = renderUntilStable(React.createElement(mainCall[1]));
     for (let i = 0; i < 6; i += 1) {
       await new Promise(r => setImmediate(r));
-      opsTree = renderUntilStable(React.createElement(mainCall[1]));
+      mainTree = renderUntilStable(React.createElement(mainCall[1]));
     }
-    const opsTexts = collectText(opsTree);
-    const opsJoined = opsTexts.join(' | ');
-    console.log(`✔ 主面板渲染出 ${opsTexts.length} 段文本`);
-    for (const key of ['运行状态', '开关', '最近活动', '附件缓存']) {
-      if (!opsJoined.includes(key)) problems.push(`主面板里找不到「${key}」`);
-    }
-    // 运维页不该重复放长文配置：提示词、触发词都留在设置里
-    for (const key of ['总结提示词', '触发关键词']) {
-      if (opsJoined.includes(key)) problems.push(`主面板里出现了配置项「${key}」——配置应留在设置里`);
+    const mainTexts = collectText(mainTree);
+    const mainJoined = mainTexts.join(' | ');
+    console.log(`✔ 主面板渲染出 ${mainTexts.length} 段文本`);
+    // 主面板放的是**完整**设置模块：配置项和运维项都必须在
+    for (const key of ['运行状态', '总开关', '功能一', '功能二', '总结提示词', '触发关键词']) {
+      if (!mainJoined.includes(key)) problems.push(`主面板里找不到「${key}」——模块没完整迁移过来`);
     }
   } catch (error) {
     problems.push('渲染主面板时抛错（点侧边栏会白屏）：' + (error && error.message ? error.message : error));
   }
 }
 
-// 渲染侧边栏入口
+// 渲染侧边栏入口：只应有图标，不该再画一遍「售前助手」文字
+// （外壳会按 label 渲染，两边都画就是用户看到的「售前助手 售前助手」）
 if (footCall !== undefined && typeof footCall[1] === 'function') {
   try {
     const footTree = renderUntilStable(React.createElement(footCall[1], { usePanelInfo: undefined }));
-    const footTexts = collectText(footTree);
-    if (!footTexts.join('').includes('售前助手')) problems.push('侧边栏入口没有渲染出「售前助手」字样');
-    else console.log('✔ 侧边栏入口可渲染');
+    // 只看**真正渲染出来的文字节点**。不能用 collectText——它为了覆盖属性文案
+    // 会把 title / aria-label 也收进来，而按钮的 title 本来就是「售前助手」。
+    const childTexts = [];
+    (function walkChildren(node) {
+      if (node === null || node === undefined || node === false) return;
+      if (typeof node === 'string' || typeof node === 'number') { childTexts.push(String(node)); return; }
+      if (Array.isArray(node)) { node.forEach(walkChildren); return; }
+      if (typeof node === 'object') walkChildren(node.children);
+    })(footTree);
+    const footJoined = childTexts.join('');
+    if (footJoined.includes('售前助手')) {
+      problems.push('侧边栏入口组件自己画了「售前助手」文字——会和外壳的 label 重复成「售前助手 售前助手」');
+    } else {
+      console.log(`✔ 侧边栏入口只画图标（文字节点：${JSON.stringify(footJoined)}），文字交给外壳`);
+    }
   } catch (error) {
     problems.push('渲染侧边栏入口时抛错：' + (error && error.message ? error.message : error));
   }

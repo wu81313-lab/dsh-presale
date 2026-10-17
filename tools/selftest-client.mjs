@@ -139,36 +139,32 @@ if (mod !== null && typeof mod.apply === 'function') {
   }
 }
 
-check('等待并注入了 settings.section', injectedSlots.includes('settings.section'), JSON.stringify(injectedSlots));
-
-// 三个挂载点：设置分区（配置）+ 侧边栏入口 + 非模态主面板（运维）。
-// 主面板是为了绕开"设置是模态窗口、打开就锁死主页面"——它不是可选装饰，
-// 少注册一个用户就少一条路，所以逐个点名检查。
-const EXPECTED_SLOTS = ['settings.section', 'sidebar.panellist', 'main'];
+// 两个挂载点，配套使用：
+//   sidebar.panellist  顶部全局导航组的入口（只画图标，文字由外壳渲染）
+//   main               该入口对应的中央页面（完整设置模块）
+//
+// 不再注册 settings.section —— 那是模态窗口，打开就锁死主页面，
+// 整块已迁到 main 面板。所以这里也断言它**没有**被注册。
+const EXPECTED_SLOTS = ['sidebar.panellist', 'main'];
 const registeredNames = registrations.map(r => r.options?.name);
-check('注册了 3 个插槽', registrations.length === 3, `实际 ${registrations.length}: ${registeredNames.join(', ')}`);
+check('注册了 2 个插槽', registrations.length === 2, `实际 ${registrations.length}: ${registeredNames.join(', ')}`);
 for (const need of EXPECTED_SLOTS) {
   check(`注册了 ${need}`, registeredNames.includes(need), registeredNames.join(', '));
 }
+check('不再注册 settings.section（模态窗口已弃用）', !registeredNames.includes('settings.section'), registeredNames.join(', '));
 
-const settingsReg = registrations.find(r => r.options?.name === 'settings.section');
 const footReg = registrations.find(r => r.options?.name === 'sidebar.panellist');
 const mainReg = registrations.find(r => r.options?.name === 'main');
 
-if (settingsReg !== undefined) {
-  const opts = settingsReg.options;
-  check('设置分区 id 为 presale', opts.id === 'presale', String(opts.id));
+if (footReg !== undefined) {
+  const opts = footReg.options;
+  check('侧边栏条目 id 为 presale', opts.id === 'presale', String(opts.id));
   check('label 是函数（外壳要求惰性求值）', typeof opts.label === 'function', typeof opts.label);
   if (typeof opts.label === 'function') {
     check('label 返回中文「售前助手」', opts.label() === '售前助手', String(opts.label()));
   }
   check('order 是数字', typeof opts.order === 'number', String(opts.order));
-  check('注册了组件', typeof settingsReg.Component === 'function');
-}
-
-if (footReg !== undefined) {
-  check('侧边栏条目 id 为 presale', footReg.options.id === 'presale', String(footReg.options.id));
-  check('侧边栏条目有 label', typeof footReg.options.label === 'function');
+  check('侧边栏条目注册了组件', typeof footReg.Component === 'function');
 }
 
 if (mainReg !== undefined) {
