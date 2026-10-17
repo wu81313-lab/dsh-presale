@@ -61,6 +61,29 @@ try {
   );
   check('openDingtalkId 以 D 开头（钉钉开放 ID 的实际形状）', id.myOid.startsWith('D'), id.myOid);
 
+  // 别名绝不能从消息里推断。
+  //
+  // `+chat-messages` 返回的是**整个会话的发送者**，1:1 单聊里必然混进对方的
+  // ID。早期版本把「出现最多的 senderId」当成自己、其余收成别名，后果有两层：
+  //   · 对方话多的那次，两路前缀对不上 → 判定「身份弱」（时好时坏）；
+  //   · 假别名会进 --senders 搜索 → **别人发的关键词也会触发插件**。
+  // 所以这里锁死：resolve() 结果里的 aliasIds 必须是空的（除非手填了设置）。
+  const manualAliases = Array.isArray(settings.get().owner?.aliasIds)
+    ? settings.get().owner.aliasIds.filter(Boolean)
+    : [];
+  check(
+    '身份解析不自行推导别名（绝不把别人的 ID 当成我）',
+    manualAliases.length > 0
+      ? JSON.stringify(id.aliasIds) === JSON.stringify(manualAliases)
+      : Array.isArray(id.aliasIds) && id.aliasIds.length === 0,
+    `aliasIds=${JSON.stringify(id.aliasIds)} 手填=${JSON.stringify(manualAliases)}`,
+  );
+  check(
+    '主 ID 来源可追溯（members / messages）',
+    id.evidence?.primarySource === 'members' || id.evidence?.primarySource === 'messages',
+    String(id.evidence?.primarySource),
+  );
+
   // ── 2. 全局搜索（发现层主通道）─────────────────────────────
   console.log('\n== 全局搜索（发现层主通道）==');
   const discoverer = createDiscoverer({
