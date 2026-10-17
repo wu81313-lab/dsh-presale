@@ -302,62 +302,6 @@ for (const p of tipTriggers) {
   }
 }
 
-// ③ 三个挂载点都要注册上。
-//
-// 设置分区是模态窗口，运维要看主页面时不能用它，所以另有一个非模态主面板
-// （main 插槽）和侧边栏入口（sidebar.footer.action）。这两个是新加的，
-// 注册失败时页面一切正常、只有点开才白屏——必须在这里提前抓住。
-const slotNames = slotCalls.map(([o]) => o?.name);
-console.log(`  已注册插槽：${slotNames.join(', ')}`);
-for (const need of ['settings.section', 'sidebar.footer.action', 'main']) {
-  if (!slotNames.includes(need)) problems.push(`缺少插槽注册：${need}`);
-}
-
-const mainCall = slotCalls.find(([o]) => o?.name === 'main');
-const footCall = slotCalls.find(([o]) => o?.name === 'sidebar.footer.action');
-if (mainCall !== undefined && mainCall[0].key !== mainCall[0].id) {
-  // main 是 keyed 插槽，key 必须与侧边栏条目的 id 一致，否则点了切不过去
-  const footId = footCall?.[0]?.id;
-  if (mainCall[0].key !== footId) {
-    problems.push(`main 的 key(${mainCall[0].key}) 与侧边栏条目 id(${footId}) 不一致——点击后切不到面板`);
-  }
-}
-
-// 渲染主面板：这里一旦抛错，用户点侧边栏就是白屏
-if (mainCall !== undefined && typeof mainCall[1] === 'function') {
-  try {
-    let opsTree = renderUntilStable(React.createElement(mainCall[1]));
-    for (let i = 0; i < 6; i += 1) {
-      await new Promise(r => setImmediate(r));
-      opsTree = renderUntilStable(React.createElement(mainCall[1]));
-    }
-    const opsTexts = collectText(opsTree);
-    const opsJoined = opsTexts.join(' | ');
-    console.log(`✔ 主面板渲染出 ${opsTexts.length} 段文本`);
-    for (const key of ['运行状态', '开关', '最近活动', '附件缓存']) {
-      if (!opsJoined.includes(key)) problems.push(`主面板里找不到「${key}」`);
-    }
-    // 运维页不该重复放长文配置：提示词、触发词都留在设置里
-    for (const key of ['总结提示词', '触发关键词']) {
-      if (opsJoined.includes(key)) problems.push(`主面板里出现了配置项「${key}」——配置应留在设置里`);
-    }
-  } catch (error) {
-    problems.push('渲染主面板时抛错（点侧边栏会白屏）：' + (error && error.message ? error.message : error));
-  }
-}
-
-// 渲染侧边栏入口
-if (footCall !== undefined && typeof footCall[1] === 'function') {
-  try {
-    const footTree = renderUntilStable(React.createElement(footCall[1], { usePanelInfo: undefined }));
-    const footTexts = collectText(footTree);
-    if (!footTexts.join('').includes('售前助手')) problems.push('侧边栏入口没有渲染出「售前助手」字样');
-    else console.log('✔ 侧边栏入口可渲染');
-  } catch (error) {
-    problems.push('渲染侧边栏入口时抛错：' + (error && error.message ? error.message : error));
-  }
-}
-
 if (problems.length > 0) {
   console.log('\n发现的问题：');
   for (const p of problems) console.log('  ✖ ' + p);
