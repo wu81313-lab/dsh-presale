@@ -140,18 +140,42 @@ if (mod !== null && typeof mod.apply === 'function') {
 }
 
 check('等待并注入了 settings.section', injectedSlots.includes('settings.section'), JSON.stringify(injectedSlots));
-check('注册了恰好 1 个插槽', registrations.length === 1, `实际 ${registrations.length}`);
 
-if (registrations.length > 0) {
-  const opts = registrations[0].options;
-  check('插槽名是 settings.section', opts.name === 'settings.section', String(opts.name));
-  check('id 为 presale', opts.id === 'presale', String(opts.id));
+// 三个挂载点：设置分区（配置）+ 侧边栏入口 + 非模态主面板（运维）。
+// 主面板是为了绕开"设置是模态窗口、打开就锁死主页面"——它不是可选装饰，
+// 少注册一个用户就少一条路，所以逐个点名检查。
+const EXPECTED_SLOTS = ['settings.section', 'sidebar.panellist', 'main'];
+const registeredNames = registrations.map(r => r.options?.name);
+check('注册了 3 个插槽', registrations.length === 3, `实际 ${registrations.length}: ${registeredNames.join(', ')}`);
+for (const need of EXPECTED_SLOTS) {
+  check(`注册了 ${need}`, registeredNames.includes(need), registeredNames.join(', '));
+}
+
+const settingsReg = registrations.find(r => r.options?.name === 'settings.section');
+const footReg = registrations.find(r => r.options?.name === 'sidebar.panellist');
+const mainReg = registrations.find(r => r.options?.name === 'main');
+
+if (settingsReg !== undefined) {
+  const opts = settingsReg.options;
+  check('设置分区 id 为 presale', opts.id === 'presale', String(opts.id));
   check('label 是函数（外壳要求惰性求值）', typeof opts.label === 'function', typeof opts.label);
   if (typeof opts.label === 'function') {
     check('label 返回中文「售前助手」', opts.label() === '售前助手', String(opts.label()));
   }
   check('order 是数字', typeof opts.order === 'number', String(opts.order));
-  check('注册了组件', typeof registrations[0].Component === 'function');
+  check('注册了组件', typeof settingsReg.Component === 'function');
+}
+
+if (footReg !== undefined) {
+  check('侧边栏条目 id 为 presale', footReg.options.id === 'presale', String(footReg.options.id));
+  check('侧边栏条目有 label', typeof footReg.options.label === 'function');
+}
+
+if (mainReg !== undefined) {
+  // main 是 keyed 插槽：key 必须等于侧边栏条目 id，否则点了切不过去
+  check('主面板 key 与侧边栏 id 一致', mainReg.options.key === footReg?.options?.id,
+    `${mainReg.options.key} vs ${footReg?.options?.id}`);
+  check('主面板注册了组件', typeof mainReg.Component === 'function');
 }
 
 check('注入了样式（跟随主题令牌）', styleTags.length === 1, `实际 ${styleTags.length}`);
