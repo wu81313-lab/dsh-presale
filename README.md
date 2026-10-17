@@ -284,9 +284,10 @@ attachments/
 ```bash
 cd ~/.dsh/plugins/dsh-presale
 
-node --test "lib/test/*.test.mjs"       # 单元测试（105 项，不需要真实钉钉数据）
+node --test "lib/test/*.test.mjs"       # 单元测试（145 项，不需要真实钉钉数据）
 node tools/selftest-assembly.mjs         # 装配自检（mock ctx，不联网）
-node tools/selftest-client.mjs           # 客户端半边自检
+node tools/selftest-client.mjs           # 客户端半边自检（主题令牌、结构、危险写法）
+node tools/selftest-client-runtime.mjs   # 客户端运行时自检（真渲染，抓白屏）
 node tools/selftest-live.mjs             # 真实链路（只读，打本机 dws）
 node tools/selftest-send-quoting.mjs     # @ 占位符与多行正文能否到达 dws（dry-run）
 node tools/selftest-real-template.mjs    # 用你配置里的真实文案走一遍发送（dry-run）
@@ -294,7 +295,25 @@ node tools/selftest-full-chain.mjs       # 完整链路：成员表 → 历史 �
 node tools/selftest-attachments.mjs      # 附件链路：真实下载 → 提取正文 → 缓存命中
 node tools/selftest-pptx-real.mjs        # 用 python-pptx 生成真实 PPT 验证解析器
 node tools/selftest-pdf-real.mjs         # 用 PyMuPDF 生成真实 PDF 验证解析链路
+node tools/selftest-summary-heading.mjs  # 总结标题去重、引用清理、署名替换
 ```
+
+**验证实际产出但不发消息**（推荐：跑真实 LLM，只返回结果）：
+
+```bash
+curl -s -X POST http://127.0.0.1:19387/presale-api/dry-run \
+  -H 'Host: 127.0.0.1:19387' -H 'x-dsh-presale-client: web' \
+  -H 'Content-Type: application/json' \
+  -d '{"kind":"summarize","conversationId":"cid..."}'
+```
+
+返回完整正文、附件清单、历史条数、耗时与 `"sent": false`。
+`kind` 可填 `summarize`（功能二）或 `provide`（功能一）。
+
+> 这条路径**只做组装，不碰发送器、不写活动记录**——即使 dryRun 关着也不会发消息。
+> 验证「梳理项目需求」的产出质量时用它，比在群里真发一条安全得多。
+> 注意：`lib/*.js` 改动要**重启 DSH** 才生效（Node 的 ESM 模块缓存不会因插件重载而清空）。
+
 
 拿**真实群文件**验证（不是自己造的样本）：
 
@@ -388,14 +407,14 @@ lib/
   llm.js               LLM 调用（需求梳理 + 销售判别）
   send.js              发送（@ 契约 + 本地校验）
   render.js            模板渲染
-  handler.js           两个动作的完整链路
+  handler.js           两个功能的完整链路（+ dryRun* 只读入口）
   poller.js            轮询编排（自适应退避）
-  web.js               面板 HTTP API
-  tools.js             三个 DSH 工具
+  web.js               面板 HTTP API（含 POST /dry-run 只读验证）
+  tools.js             五个 DSH 工具
   test/                单元测试
 client/
   client.js            设置面板（注册 settings.section）
-tools/                 自检与诊断脚本
+tools/                 自检、诊断与代码维护脚本
 cordis.patch.yml       插件装载声明
 ```
 
