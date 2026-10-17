@@ -992,6 +992,22 @@ window.__ModuleLoader__.load({
                 onChange: e => edit('ownerName', e.target.value),
               }),
             ),
+            // 身份钉死。
+            //
+            // 为什么需要这一格：不填时插件每次都要"猜"哪个 openDingtalkId 是我
+            // （按姓名去群成员表里找）。猜不中就提示「身份弱校验」，得反复重新识别。
+            // 填了就直接采信，一次都不再猜——这是让身份彻底稳定的唯一办法。
+            h(Field, {
+              label: '我的 openDingtalkId',
+              hint: '留空 = 每次自动识别（按姓名去群成员表里找，找不到就提示「身份弱校验」）；填了就直接采信、不再自动识别。填错会让插件去监听别人，没把握就别填。当前识别到的值可在上面「运行状态」里看到。',
+            },
+              h('input', {
+                className: 'dsp-input dsp-mono',
+                value: settings.owner?.openDingtalkId ?? '',
+                placeholder: '留空 = 自动识别',
+                onChange: e => edit('owner.openDingtalkId', e.target.value),
+              }),
+            ),
             // 这张卡原先**没有保存按钮**——`edit()` 只写本地草稿，
             // 用户改完这两格如果没去点别的卡的保存，刷新后改动就没了。
             // 补齐，与其他卡一致。
@@ -999,7 +1015,19 @@ window.__ModuleLoader__.load({
               h('button', {
                 className: 'dsp-btn dsp-btn-primary',
                 disabled: busy === 'save',
-                onClick: () => void save({ company: settings.company, ownerName: settings.ownerName }),
+                onClick: () => void save({
+                  company: settings.company,
+                  ownerName: settings.ownerName,
+                  owner: {
+                    // 整个 owner 一起提交：服务端是合并语义，但显式带上
+                    // 其余字段（userId / aliasIds）更安全——不会因为
+                    // 只传 openDingtalkId 而把它们清空。
+                    userId: settings.owner?.userId ?? '',
+                    userName: settings.owner?.userName ?? '',
+                    aliasIds: Array.isArray(settings.owner?.aliasIds) ? settings.owner.aliasIds : [],
+                    openDingtalkId: settings.owner?.openDingtalkId ?? '',
+                  },
+                }),
               }, '保存署名'),
             ),
           ),
