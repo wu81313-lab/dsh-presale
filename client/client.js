@@ -214,6 +214,27 @@ window.__ModuleLoader__.load({
   border: 1px solid var(--dsw-alias-border, rgba(128,128,128,.3));
   box-shadow: 0 6px 24px rgba(0,0,0,.14); pointer-events: none; }
 .dsp-tip-above { transform: translateY(-100%); }
+
+/* ── 非模态主面板 ───────────────────────────────────────────
+   设置是模态窗口，这里不是：所以按"页面"排版，两侧留白、内容居中，
+   接近 DSH 自己的中央面板观感，而不是塞满整屏。 */
+.dsp-page { display: flex; flex-direction: column; gap: 18px;
+  width: 100%; max-width: 760px; margin: 0 auto;
+  padding: 24px 24px 48px; box-sizing: border-box; }
+
+/* ── 侧边栏入口 ─────────────────────────────────────────────
+   宽度交给容器：宿主侧栏收窄时它自己跟着收，不用 JS 猜宽窄。 */
+.dsp-foot { display: flex; align-items: center; gap: 8px; width: 100%;
+  padding: 7px 10px; border: 0; border-radius: 8px;
+  background: transparent; cursor: pointer; text-align: left;
+  font-size: 13px; font-weight: 400; font-family: inherit;
+  color: var(--dsw-alias-text-2, inherit); }
+.dsp-foot:hover { background: var(--dsw-alias-bg-hover, rgba(128,128,128,.1));
+  color: var(--dsw-alias-text-1, inherit); }
+.dsp-foot[data-active='true'] { background: var(--dsw-alias-bg-hover, rgba(128,128,128,.12));
+  color: var(--dsw-alias-text-1, inherit); font-weight: 500; }
+.dsp-foot-icon { flex: none; width: 16px; text-align: center; font-size: 13px; opacity: .8; }
+.dsp-foot-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 `;
 
     let styleElement = null;
@@ -1175,6 +1196,328 @@ window.__ModuleLoader__.load({
       );
     }
 
+    // ─────────────────── 运维主面板（非模态 · main 插槽）───────────────────
+
+    /**
+     * 侧边栏「售前助手」入口对应的中央页面。
+     *
+     * ## 为什么要有它
+     *
+     * DSH 的设置对话框是**原生模态窗口**——打开后主页面完全点不动，侧边栏、
+     * 输入框全都挡住。这对"配一次放很久"的东西（触发词、提示词）无所谓，
+     * 但「看它在不在跑、刚才那轮为什么没发、先停一下监听」这类事，恰恰是
+     * 需要**边看主页面边做**的，被锁死就很别扭。
+     *
+     * 所以把运维部分搬到 `main` 插槽：那是普通中央面板，不挡任何操作。
+     * 配置项仍留在设置里——两处分工清楚，互不重复。
+     *
+     * ## 和设置页的区别
+     *
+     * · 刷新更快（3 秒 vs 5 秒）——这里是"盯着它工作"的地方；
+     * · 只放能改动**运行状态**的东西，不放提示词这类长文配置；
+     * · 页面两侧留白，按居中的内容栏排版，接近 DSH 自己的面板观感。
+     */
+    function OpsPanel() {
+      const [status, setStatus] = React.useState(null);
+      const [draft, setDraft] = React.useState(null);
+      const [activity, setActivity] = React.useState([]);
+      const [stats, setStats] = React.useState(null);
+      const [error, setError] = React.useState('');
+      const [busy, setBusy] = React.useState('');
+      const [saved, setSaved] = React.useState('');
+      const [showDetails, setShowDetails] = React.useState(false);
+      /** 用户动过开关草稿后，刷新不要再覆盖它。 */
+      const dirtyRef = React.useRef(false);
+
+      const refresh = React.useCallback(async () => {
+        try {
+          const [s, st, act, cache] = await Promise.all([
+            api('/settings'),
+            api('/status'),
+            api('/activity?limit=20'),
+            // 缓存统计失败不能连累整页：单独兜住
+            api('/attachments').catch(() => null),
+          ]);
+          if (!dirtyRef.current) {
+            setDraft({
+              enabled: s.settings.enabled === true,
+              dryRun: s.settings.dryRun === true,
+            });
+          }
+          setStatus(st);
+          setActivity(act.entries ?? []);
+          setStats(cache);
+          setError('');
+        } catch (err) {
+          setError(err?.message ?? String(err));
+        }
+      }, []);
+
+      React.useEffect(() => {
+        void refresh();
+        const timer = setInterval(() => void refresh(), 3000);
+        return () => clearInterval(timer);
+      }, [refresh]);
+
+      /** 改开关草稿（只碰 enabled / dryRun 两项，不会覆盖设置页的长文配置）。 */
+      function mark(key, value) {
+        dirtyRef.current = true;
+        setDraft(prev => ({ ...(prev ?? {}), [key]: value }));
+        setSaved('');
+      }
+
+      async function act(kind, path, body) {
+        setBusy(kind);
+        try {
+          await api(path, { method: 'POST', body });
+          setError('');
+          await refresh();
+        } catch (err) {
+          setError(err?.message ?? String(err));
+        } finally {
+          setBusy('');
+        }
+      }
+
+      async function saveSwitch() {
+        if (draft === null) return;
+        setBusy('save');
+        try {
+          // strict：只提交这两项，服务端合并进现有设置，其余字段原样保留
+          await api('/settings', { method: 'POST', body: { patch: draft, strict: true } });
+          dirtyRef.current = false;
+          setSaved('开关已保存');
+          await refresh();
+        } catch (err) {
+          setError(err?.message ?? String(err));
+        } finally {
+          setBusy('');
+        }
+      }
+
+      if (status === null || draft === null) {
+        return h('div', { className: 'dsp-page' },
+          h(Card, {
+            title: '售前助手',
+            hint: error.length > 0 ? `加载失败：${error}` : '正在读取插件状态…',
+            hintMode: 'inline',
+          },
+            h('div', { className: 'dsp-actions' },
+              h('button', { className: 'dsp-btn', onClick: () => void refresh() }, '重试'),
+            ),
+          ),
+        );
+      }
+
+      const poller = status.poller ?? {};
+      const id = status.identity ?? {};
+      const llmInfo = status.llm ?? {};
+      // 读实际运行状态，不读 settings.enabled 那个草稿——
+      // 否则勾选框刚改还没保存时，开关会和实际不符
+      const listening = poller.running === true;
+
+      const badges = [];
+      if (poller.enabled !== true) badges.push(['warn', '未启用']);
+      else if (poller.running) badges.push(['ok', '监听中']);
+      else badges.push(['warn', '已启用但未运行']);
+      if (poller.dryRun) badges.push(['warn', '试运行：不发消息']);
+      if (poller.authOk === false) badges.push(['err', 'dws 未登录']);
+      if (id.state === 'anchored') badges.push(['ok', `身份：${id.myName || id.myOid}`]);
+      else if (id.state === 'weak') badges.push(['warn', `身份弱校验：${id.myName || id.myOid}`]);
+      else badges.push(['err', '身份未锚定']);
+      if (llmInfo.available !== true) badges.push(['err', 'LLM 不可用']);
+
+      return h('div', { className: 'dsp-page' },
+
+        // ── 运行状态 ─────────────────────────────────────────
+        h(Card, {
+          title: '运行状态',
+          action: [
+            h('button', {
+              key: 'refresh',
+              className: 'dsp-btn dsp-btn-sm',
+              onClick: () => void refresh(),
+            }, '刷新'),
+            // 监听启停做成开关：位置本身表达状态，一眼可读
+            h('label', {
+              key: 'switch',
+              className: `dsp-switch${listening ? ' on' : ''}${busy !== '' ? ' busy' : ''}`,
+              title: listening ? '点击停止监听' : '点击开始监听',
+            },
+              h('input', {
+                type: 'checkbox',
+                checked: listening,
+                disabled: busy !== '',
+                onChange: () => void act(listening ? 'stop' : 'start', listening ? '/stop' : '/start'),
+              }),
+              h('span', { className: 'dsp-switch-track' },
+                h('span', { className: 'dsp-switch-text' },
+                  busy === 'start' || busy === 'stop' ? '…' : (listening ? 'On' : 'Off')),
+                h('span', { className: 'dsp-switch-thumb' }),
+              ),
+              h('span', { className: 'dsp-switch-caption' },
+                busy === 'start' ? '启动中…'
+                  : busy === 'stop' ? '停止中…'
+                  : (listening ? '监听中' : '已停止')),
+            ),
+          ],
+        },
+          h('div', { className: 'dsp-row' },
+            ...badges.map(([kind, text], i) => h('span', { key: i, className: `dsp-badge dsp-badge-${kind}` }, text)),
+            h(Caret, { open: showDetails, onClick: () => setShowDetails(v => !v) }),
+          ),
+          showDetails ? h('div', { className: 'dsp-grid', style: { marginTop: 12 } },
+            h(Kv, { k: '上次检查', v: `${humanTime(poller.lastSearchAt)}${relative(poller.lastSearchAt) ? `（${relative(poller.lastSearchAt)}）` : ''}` }),
+            h(Kv, { k: '上次命中', v: humanTime(poller.lastHitAt) }),
+            h(Kv, { k: '已完成周期', v: `${poller.cycles ?? 0} 次 / 命中 ${poller.hits ?? 0} 次` }),
+            h(Kv, { k: '当前轮询间隔', v: poller.currentIntervalSeconds > 0 ? `${poller.currentIntervalSeconds} 秒` : '尚未计算' }),
+            h(Kv, { k: '连续无命中', v: `${poller.consecutiveEmpty ?? 0} 轮（会自动拉长间隔省配额）` }),
+            h(Kv, { k: '消息水位', v: poller.watermark?.lastSeenText ?? '未初始化' }),
+            h(Kv, { k: '我的 openDingtalkId', v: h('span', { className: 'dsp-mono' }, id.myOid || '（未解析）') }),
+            h(Kv, { k: 'LLM 路由', v: llmInfo.route?.provider ? `${llmInfo.route.provider} / ${llmInfo.route.model}` : '不可用' }),
+          ) : null,
+          // 错误与告警不受折叠影响：有问题必须直接看见
+          poller.lastError ? h('div', { className: 'dsp-note dsp-note-warn', style: { marginTop: 10 } }, `最近错误：${poller.lastError}`) : null,
+          (status.settingsWarnings ?? []).length > 0
+            ? h('div', { className: 'dsp-note dsp-note-warn', style: { marginTop: 10 } },
+                '配置告警：', h('ul', { style: { margin: '6px 0 0 18px' } },
+                  (status.settingsWarnings ?? []).map((w, i) => h('li', { key: i }, w))))
+            : null,
+        ),
+
+        // ── 开关 ─────────────────────────────────────────────
+        h(Card, {
+          title: '开关',
+          hint: '建议先用「试运行」把文案和 @ 判定调准，确认无误后再关掉试运行让它真发消息。',
+          action: h('button', {
+            className: 'dsp-btn dsp-btn-primary dsp-btn-sm',
+            disabled: busy === 'save',
+            onClick: () => void saveSwitch(),
+          }, busy === 'save' ? '保存中…' : '保存开关'),
+        },
+          h('div', { className: 'dsp-row' },
+            h('label', { className: 'dsp-check' },
+              h('input', {
+                type: 'checkbox',
+                checked: draft.enabled === true,
+                onChange: e => mark('enabled', e.target.checked),
+              }),
+              `启用监听${draft.enabled ? '' : '（关闭后重启 DSH 不会自动开始）'}`,
+            ),
+          ),
+          h('div', { className: 'dsp-row', style: { marginTop: 8 } },
+            h('label', { className: 'dsp-check' },
+              h('input', {
+                type: 'checkbox',
+                checked: draft.dryRun === true,
+                onChange: e => mark('dryRun', e.target.checked),
+              }),
+              draft.dryRun ? '试运行：只记录，不发送' : '真实发送到群',
+            ),
+          ),
+          (error.length > 0 || saved.length > 0)
+            ? h('div', { className: `dsp-note ${error.length > 0 ? 'dsp-note-err' : ''}`, style: { marginTop: 10 } },
+                error.length > 0 ? `错误：${error}` : saved)
+            : null,
+        ),
+
+        // ── 最近活动 ─────────────────────────────────────────
+        h(Card, {
+          title: '最近活动',
+          hint: '每轮「发现 → 判定 → 发送/跳过」都记一条。试运行模式下这里是唯一的观察窗口。',
+          hintMode: 'inline',
+        },
+          activity.length === 0
+            ? h('div', { className: 'dsp-note' }, '暂无记录。在群里发一次关键词就会有。')
+            : h('div', { className: 'dsp-log' },
+                activity.slice(0, 12).map((e, i) => h('div', { key: e.ts ?? i, className: 'dsp-log-item' },
+                  h('div', null,
+                    h('span', { className: 'dsp-badge' }, `${e.action ?? '?'} / ${e.decision ?? '?'}`),
+                    ' ',
+                    h('span', { className: 'dsp-card-hint', style: { margin: 0 } }, humanTime(e.ts)),
+                    e.conversationName ? `  ${e.conversationName}` : '',
+                  ),
+                  e.triggerText ? h('div', { style: { marginTop: 2 } }, `触发：${e.triggerText}`) : null,
+                  e.mention && e.mention.mode && e.mention.mode !== 'none'
+                    ? h('div', { style: { marginTop: 2 } }, `@：${e.mention.name || '?'}（${e.mention.mode}）`)
+                    : null,
+                )),
+                activity.length > 12
+                  ? h('div', { className: 'dsp-card-hint', style: { marginTop: 8 } },
+                      `只显示最近 12 条，共 ${activity.length} 条。完整记录在设置里的「活动记录」。`)
+                  : null,
+              ),
+        ),
+
+        // ── 附件缓存 ─────────────────────────────────────────
+        h(Card, {
+          title: '附件缓存',
+          hint: '下载的文件与提取出的文本都缓存在这里，同一个文件第二次遇到会直接命中缓存。',
+          hintMode: 'inline',
+          action: h('button', {
+            className: 'dsp-btn dsp-btn-sm',
+            disabled: busy !== '',
+            onClick: () => void act('cacheclear', '/attachments/clear'),
+          }, '清空缓存'),
+        },
+          stats === null || stats.available !== true
+            ? h('div', { className: 'dsp-note' }, '附件读取未启用，或尚未产生缓存。')
+            : h('div', null,
+                h('div', { className: 'dsp-card-hint', style: { margin: '0 0 6px 0' } },
+                  `${(stats.totalBytes / 1024 / 1024).toFixed(2)} MB｜${stats.entryCount} 个条目｜${stats.fileCount} 个文件`),
+                h('div', { className: 'dsp-mono' }, stats.cacheDir || '（未启用）'),
+              ),
+        ),
+      );
+    }
+
+    // ─────────────────────── 侧边栏入口按钮 ───────────────────────
+
+    /** 切到售前助手主面板。layout 服务拿不到时只告警，不抛。 */
+    function openPresalePanel(ctx) {
+      try {
+        const layout = ctx?.get?.('layout');
+        if (layout !== undefined && typeof layout.selectPanel === 'function') {
+          layout.selectPanel(PANEL_ID);
+          return;
+        }
+        console.warn('[dsh-presale] 找不到 layout 服务，无法切到售前助手面板');
+      } catch (error) {
+        console.warn('[dsh-presale] 切换面板失败：' + (error?.message ?? error));
+      }
+    }
+
+    function FootEntryButton(props) {
+      return h('button', {
+        type: 'button',
+        className: 'dsp-foot',
+        title: '售前助手',
+        'aria-label': '售前助手',
+        'data-active': props?.active === true ? 'true' : undefined,
+        'aria-current': props?.active === true ? 'page' : undefined,
+        onClick: () => openPresalePanel(props?.__presaleCtx),
+      },
+        h('span', { className: 'dsp-foot-icon', 'aria-hidden': 'true' }, '◈'),
+        h('span', { className: 'dsp-foot-label' }, '售前助手'));
+    }
+
+    /**
+     * 能拿到宿主注入的 usePanelInfo 时显示选中态。
+     *
+     * 拆成两个组件而不是在 FootEntryButton 里条件调用 hook——
+     * 条件调用 hook 会打乱 hook 顺序，React 会直接报错。
+     */
+    function FootEntryActive(props) {
+      const active = props.usePanelInfo(info => info?.activePanelId === PANEL_ID);
+      return h(FootEntryButton, { ...props, active: active === true });
+    }
+
+    function FootEntry(props) {
+      return typeof props?.usePanelInfo === 'function'
+        ? h(FootEntryActive, props)
+        : h(FootEntryButton, props);
+    }
+
     // ─────────────────────────── 装配 ───────────────────────────
 
     const inject = ['slots'];
@@ -1185,23 +1528,46 @@ window.__ModuleLoader__.load({
 
       ctx.effect(() => injectStyles(), 'dsh-presale: styles');
 
-      // 注册设置左侧一级导航入口。
-      // settings.section 只投影 id / order / label，第三方拿不到图标（一律是齿轮）。
-      ctx.effect(() => slots.inject('settings.section', () => {
+      /**
+       * 挂一个插槽。
+       *
+       * 每个挂载点各自兜错：任何一个插槽注册失败（选项不符、槽位改名、
+       * 宿主版本差异）都不能连累其它挂载点，更不能让整个客户端半边加载失败。
+       * 这是照 dsh-local-kb 的做法——它已经在真机上验证过。
+       */
+      const mount = (slot, options, Component, label) => ctx.effect(() => slots.inject(slot, () => {
         try {
-          return slots.register({
-            name: 'settings.section',
-            id: PANEL_ID,
-            // 排在「备份与迁移」之后，正好落在截图里空出来的那一行
-            order: 60,
-            label: () => '售前助手',
-            // 不用 locale：直接写中文标签，避免依赖宿主字典文件
-          }, Panel);
+          return slots.register(options, Component);
         } catch (error) {
-          console.error('[dsh-presale] 注册设置入口失败：' + (error && error.message ? error.message : error));
+          console.error(`[dsh-presale] 注册插槽 ${slot} 失败：${error && error.message ? error.message : error}`);
           return () => {};
         }
-      }), 'dsh-presale: settings section');
+      }), label);
+
+      // 1) 设置分区：配置项（触发词、提示词等长期不动的部分）。
+      // settings.section 只投影 id / order / label，第三方拿不到图标（一律齿轮）。
+      mount('settings.section', {
+        name: 'settings.section',
+        id: PANEL_ID,
+        // 排在「备份与迁移」之后
+        order: 60,
+        label: () => '售前助手',
+      }, props => h(Panel, props), 'dsh-presale: settings section');
+
+      // 2) 侧边栏入口：那一行紧邻「设置」按钮上方。
+      // 之所以要它：设置是模态窗口，而运维需要看着主页面做。
+      mount('sidebar.footer.action', {
+        name: 'sidebar.footer.action',
+        id: PANEL_ID,
+        order: 100,
+        label: () => '售前助手',
+      }, props => h(FootEntry, { ...props, __presaleCtx: ctx }), 'dsh-presale: sidebar entry');
+
+      // 3) 非模态主面板：key 与侧边栏条目的 id 一致，宿主据此派发。
+      mount('main', {
+        name: 'main',
+        key: PANEL_ID,
+      }, () => h(OpsPanel), 'dsh-presale: main panel');
     }
 
     module.exports = { apply, inject, Panel };
