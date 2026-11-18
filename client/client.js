@@ -612,6 +612,23 @@ window.__ModuleLoader__.load({
           ) : null,
           // 出错与告警**不受折叠影响**：有问题必须直接看见，不能藏在详情里
           poller.lastError ? h('div', { className: 'dsp-note dsp-note-warn', style: { marginTop: 10 } }, `最近错误：${poller.lastError}`) : null,
+          // 投递失败：组装成功、但消息没发出去。
+          //
+          // 这种情况最坑——群里什么反应都没有，用户只会觉得"我发了关键词它没动"。
+          // 2026-11-18 就因此白等了一上午（dws 1.0.64 与服务端 schema 不同步，
+          // 报「请求参数不能为空」）。所以失败必须常驻显示，并说清重试状态。
+          status.lastDeliveryFailure
+            ? h('div', { className: 'dsp-note dsp-note-err', style: { marginTop: 10 } },
+                `投递失败（${humanTime(status.lastDeliveryFailure.at)}）：`
+                + `${status.lastDeliveryFailure.conversationName || '未知会话'} 的`,
+                `「${status.lastDeliveryFailure.action === 'provide' ? '功能一' : '功能二'}」没有发出去。`,
+                h('div', { style: { marginTop: 4 } }, `原因：${status.lastDeliveryFailure.error || '（未记录）'}`),
+                h('div', { style: { marginTop: 4 } },
+                  status.lastDeliveryFailure.willRetry
+                    ? `将在下一轮自动重试（已试 ${status.lastDeliveryFailure.attempt} 次）。`
+                    : `已放弃重试（共 ${status.lastDeliveryFailure.attempt} 次）。请修好上游后，在群里重新发一次触发词。`),
+              )
+            : null,
           (status.settingsWarnings ?? []).length > 0
             ? h('div', { className: 'dsp-note dsp-note-warn', style: { marginTop: 10 } },
                 '配置告警：', h('ul', { style: { margin: '6px 0 0 18px' } }, (status.settingsWarnings ?? []).map((w, i) => h('li', { key: i }, w))))
